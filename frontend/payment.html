@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Bus Payment</title>
+
+<style>
+
+body{
+margin:0;
+font-family:Segoe UI;
+
+background:linear-gradient(
+135deg,
+#0f2027,
+#203a43,
+#2c5364
+);
+
+color:white;
+text-align:center;
+}
+
+.container{
+
+width:400px;
+
+margin:auto;
+
+margin-top:40px;
+
+}
+
+/* CARD */
+
+.card{
+
+background:#1f2a38;
+
+padding:25px;
+
+border-radius:12px;
+
+margin-bottom:20px;
+
+}
+
+/* INPUT */
+
+textarea{
+
+width:100%;
+
+height:120px;
+
+border-radius:8px;
+
+border:none;
+
+padding:10px;
+
+font-size:14px;
+
+}
+
+/* BUTTON */
+
+button{
+
+margin-top:15px;
+
+padding:12px 25px;
+
+border:none;
+
+border-radius:8px;
+
+background:#22c1c3;
+
+color:white;
+
+font-size:15px;
+
+cursor:pointer;
+}
+
+button:hover{
+opacity:0.9;
+}
+
+.success{
+
+color:#2ecc71;
+
+font-weight:bold;
+}
+
+.error{
+
+color:#e74c3c;
+
+font-weight:bold;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<h1>Complete Your Payment</h1>
+
+<div class="container">
+
+<div class="card">
+
+<h3>Booking Summary</h3>
+
+<p>Seats: <span id="seatList"></span></p>
+
+<p>Total Fare: KSH <span id="totalFare"></span></p>
+
+<h3>M-Pesa Payment</h3>
+
+<p>Amount: <b id="amount"></b></p>
+
+<h3>Enter M-Pesa Number</h3>
+
+<input 
+type="text" 
+id="phoneNumber" 
+placeholder="07XXXXXXXX"
+style="padding:10px; width:220px; border-radius:6px; border:none;"
+>
+
+<br><br>
+
+<button onclick="payNow()">Pay Now</button>
+
+</div>
+
+</div>
+
+<script>
+/* Get data from localStorage */
+const selectedSeats = JSON.parse(localStorage.getItem("selectedSeats")) || [];
+const busPlate = localStorage.getItem("selectedBusPlate") || "N/A";
+const destination = localStorage.getItem("selectedDestination") || "N/A";
+const farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
+
+/* Validate that seats were selected */
+if (selectedSeats.length === 0) {
+    alert("No seats selected.");
+    window.location.href = "trips.html";
+}
+
+/* Calculate total fare */
+const total = selectedSeats.length * farePerSeat;
+
+/* Display booking information */
+document.getElementById("seatList").innerText = selectedSeats.join(", ");
+document.getElementById("totalFare").innerText = total;
+document.getElementById("amount").innerText = "KSH " + total;
+
+/* Payment handler */
+function payNow() {
+    const phone = document.getElementById("phoneNumber").value.trim();
+
+    // Validate phone number
+    if (!/^07\d{8}$/.test(phone)) {
+        alert("Please enter a valid M-Pesa number (07XXXXXXXX).");
+        return;
+    }
+
+    const bookingId = localStorage.getItem("bookingId");
+
+    if (!bookingId) {
+        alert("Booking ID missing.");
+        return;
+    }
+
+    console.log("Booking ID:", bookingId);
+
+    fetch("http://localhost:3000/api/pay", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ bookingId: bookingId, phone: phone })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log("Payment response:", data);
+
+        if (data.success) {
+            // SAVE TICKET DATA TO LOCALSTORAGE
+            const ticketID = 'TICKET' + Date.now() + Math.floor(Math.random() * 1000);
+            localStorage.setItem("ticketID", ticketID);
+            localStorage.setItem("ticketBusPlate", busPlate);
+            localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
+            localStorage.setItem("ticketAmount", total);
+
+            console.log("Ticket saved:", {
+                ticketID: ticketID,
+                busPlate: busPlate,
+                selectedSeats: selectedSeats,
+                total: total
+            });
+            // NOW REDIRECT
+            window.location.href = "ticket.html";
+        } else {
+            alert(data.error || "Payment failed");
+        }
+    })
+    .catch(err => {
+        console.error("Payment error:", err);
+        alert("Payment error: " + err.message);
+    });
+}
+</script>
+
+</body>
+
+</html>

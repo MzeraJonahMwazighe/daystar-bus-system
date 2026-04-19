@@ -1,0 +1,28 @@
+{
+  "name": "daystar-bus-booking-system",
+  "version": "1.0.0",
+  "description": "Daystar University Bus Booking System",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev": "nodemon backend/server.js"
+  },
+  "keywords": [
+    "bus",
+    "booking",
+    "daystar",
+    "university"
+  ],
+  "author": "Daystar Dev Team",
+  "license": "MIT",
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.6",
+    "dotenv": "^16.0.3",
+    "express": "^4.22.1",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Your Bus Ticket</title>
+
+<!-- Add QR Code Library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<style>
+
+body {
+    margin: 0;
+    font-family: Segoe UI, sans-serif;
+    background: linear-gradient(
+        135deg,
+        #0f2027,
+        #203a43,
+        #2c5364
+    );
+    color: white;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+}
+
+.ticket-container {
+    background: #1f2a38;
+    border-radius: 14px;
+    padding: 40px;
+    max-width: 500px;
+    width: 100%;
+    border-left: 6px solid #22c1c3;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+.ticket-header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+.ticket-header h1 {
+    margin: 0 0 5px 0;
+    font-size: 28px;
+    color: #22c1c3;
+}
+
+.ticket-header p {
+    margin: 0;
+    color: #b0bec5;
+    font-size: 14px;
+}
+
+.ticket-info {
+    background: #0f2027;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    border-left: 4px solid #22c1c3;
+}
+
+.info-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid #2c3e50;
+}
+
+.info-row:last-child {
+    border-bottom: none;
+}
+
+.info-row strong {
+    color: #22c1c3;
+}
+
+.info-row span {
+    color: #b0bec5;
+    text-align: right;
+}
+
+.qr-section {
+    text-align: center;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+#qrCode {
+    display: inline-block;
+    padding: 10px;
+    background: white;
+}
+
+.ticket-id {
+    text-align: center;
+    margin-top: 20px;
+    padding: 15px;
+    background: #22c1c3;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    color: white;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    margin-top: 30px;
+}
+
+.action-btn {
+    flex: 1;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+.action-btn-primary {
+    background: #22c1c3;
+    color: white;
+}
+
+.action-btn-primary:hover {
+    background: #1ba0a0;
+}
+
+.action-btn-secondary {
+    background: #2c3e50;
+    color: white;
+}
+
+.action-btn-secondary:hover {
+    background: #34495e;
+}
+
+.error-message {
+    background: #e74c3c;
+    padding: 20px;
+    border-radius: 8px;
+    text-align: center;
+    margin: 20px;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="ticket-container" id="ticketContent">
+    <!-- Content will be populated by JavaScript -->
+</div>
+
+<div class="error-message" id="errorMessage" style="display: none;">
+    <p id="errorText"></p>
+</div>
+
+<script>
+
+// Get ticket data from localStorage
+const ticketID = localStorage.getItem("ticketID");
+const busPlate = localStorage.getItem("ticketBusPlate");
+const selectedSeats = JSON.parse(localStorage.getItem("ticketSeats")) || [];
+const amount = localStorage.getItem("ticketAmount") || "0";
+const destination = localStorage.getItem("selectedDestination") || "Unknown";
+const selectedTime = localStorage.getItem("selectedTime") || "Not available";
+
+// Validate that ticket data exists
+if (!ticketID || !busPlate || selectedSeats.length === 0) {
+    document.getElementById("ticketContent").style.display = "none";
+    document.getElementById("errorMessage").style.display = "block";
+    document.getElementById("errorText").innerText = "Error: No booking information found. Please complete a booking first.";
+} else {
+    // Display ticket information
+    const ticketContent = document.getElementById("ticketContent");
+    
+    ticketContent.innerHTML = `
+        <div class="ticket-header">
+            <h1>Daystar Bus Service</h1>
+            <p>Your Bus Ticket</p>
+        </div>
+
+        <div class="ticket-info">
+            <div class="info-row">
+                <strong>Ticket ID:</strong>
+                <span id="displayTicketID">${ticketID}</span>
+            </div>
+            <div class="info-row">
+                <strong>Bus Plate:</strong>
+                <span>${busPlate}</span>
+            </div>
+            <div class="info-row">
+                <strong>Destination:</strong>
+                <span>${destination.charAt(0).toUpperCase() + destination.slice(1)}</span>
+            </div>
+            <div class="info-row">
+                <strong>Departure Time:</strong>
+                <span>${selectedTime}</span>
+            </div>
+            <div class="info-row">
+                <strong>Seats:</strong>
+                <span>${selectedSeats.join(", ")}</span>
+            </div>
+            <div class="info-row">
+                <strong>Amount Paid:</strong>
+                <span>KSH ${amount}</span>
+            </div>
+        </div>
+
+        <div class="qr-section">
+            <p style="color: #333; margin: 0 0 15px 0; font-weight: bold;">Scan to board</p>
+            <div id="qrCode"></div>
+        </div>
+
+        <div class="ticket-id">
+            ${ticketID}
+        </div>
+
+        <div class="action-buttons">
+            <button class="action-btn action-btn-primary" onclick="downloadTicket()">
+                Download Ticket
+            </button>
+            <button class="action-btn action-btn-secondary" onclick="goHome()">
+                Back to Home
+            </button>
+        </div>
+    `;
+
+    // Generate QR Code
+    const qrData = {
+        ticket: ticketID,
+        bus: busPlate,
+        seats: selectedSeats,
+        time: selectedTime,
+        destination: destination
+    };
+
+    new QRCode(document.getElementById("qrCode"), {
+        text: JSON.stringify(qrData),
+        width: 200,
+        height: 200,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.H
+    });
+}
+
+// Download ticket function
+function downloadTicket() {
+    alert("Ticket downloaded! (Feature available in production environment)");
+}
+
+// Go home function
+function goHome() {
+    localStorage.clear();
+    window.location.href = "index.html";
+}
+
+</script>
+
+<script src="ticket.js"></script>
+
+</body>
+
+</html>

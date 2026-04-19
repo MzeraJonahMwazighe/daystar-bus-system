@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Select Your Bus & Seat</title>
+
+<style>
+
+body{
+    margin:0;
+    font-family:Segoe UI, sans-serif;
+
+    background: linear-gradient(
+        135deg,
+        #0f2027,
+        #203a43,
+        #2c5364
+    );
+
+    color:white;
+}
+
+header{
+    text-align:center;
+    padding:50px 20px;
+}
+
+header h1{
+    font-size:36px;
+    margin:0 0 10px 0;
+}
+
+header p{
+    color:#cfd8dc;
+    margin:0;
+}
+
+.container{
+    width:90%;
+    max-width:1000px;
+    margin:auto;
+}
+
+/* BUS LIST STYLES */
+.bus-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:20px;
+    margin-bottom:40px;
+}
+
+.bus-card{
+    background:#1f2a38;
+    padding:25px;
+    border-radius:14px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    border-left:6px solid #22c1c3;
+    transition:0.2s;
+    cursor:pointer;
+}
+
+.bus-card:hover{
+    transform:scale(1.02);
+}
+
+.bus-info{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+}
+
+.bus-plate{
+    font-size:22px;
+    font-weight:bold;
+}
+
+.available{
+    color:#2ecc71;
+}
+
+.departed{
+    color:#e74c3c;
+}
+
+.time{
+    color:#b0bec5;
+}
+
+.arrow{
+    font-size:28px;
+    color:#22c1c3;
+}
+
+/* MODAL STYLES */
+.modal-overlay {
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    width:100%;
+    height:100%;
+    background:rgba(0,0,0,0.7);
+    z-index:1000;
+    justify-content:center;
+    align-items:center;
+}
+
+.modal-overlay.active {
+    display:flex;
+}
+
+.modal-content {
+    background:#1f2a38;
+    border-radius:14px;
+    padding:40px;
+    max-width:500px;
+    width:90%;
+    border-left:6px solid #22c1c3;
+}
+
+.modal-content h2 {
+    margin-top:0;
+    color:white;
+}
+
+.modal-info {
+    margin:20px 0;
+    padding:15px;
+    background:#0f2027;
+    border-radius:8px;
+    border-left:4px solid #22c1c3;
+}
+
+.modal-info p {
+    margin:8px 0;
+    color:#b0bec5;
+}
+
+.modal-info strong {
+    color:#22c1c3;
+}
+
+.modal-buttons {
+    display:flex;
+    gap:15px;
+    margin-top:30px;
+}
+
+.modal-btn {
+    flex:1;
+    padding:15px;
+    border:none;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.2s;
+}
+
+.modal-btn-primary {
+    background:#22c1c3;
+    color:white;
+}
+
+.modal-btn-primary:hover {
+    background:#1ba0a0;
+}
+
+.modal-btn-secondary {
+    background:#2c3e50;
+    color:white;
+}
+
+.modal-btn-secondary:hover {
+    background:#34495e;
+}
+
+/* SEAT MAP STYLES */
+.seat-map-container {
+    display:none;
+}
+
+.seat-map-container.active {
+    display:block;
+}
+
+.seat-header {
+    background:#1f2a38;
+    padding:25px;
+    border-radius:14px;
+    margin-bottom:20px;
+    border-left:6px solid #22c1c3;
+}
+
+.seat-header h2 {
+    margin:0 0 15px 0;
+}
+
+.seat-header p {
+    margin:5px 0;
+    color:#b0bec5;
+}
+
+.bus-grid-layout {
+    background:#1f2a38;
+    padding:30px;
+    border-radius:14px;
+    margin-bottom:20px;
+    overflow-x:auto;
+}
+
+.bus-grid-seats {
+    display: inline-grid;
+    gap: 15px;
+    min-width: 100%;
+    justify-content: center;
+}
+
+.seat {
+    width:50px;
+    height:50px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.3s;
+    background:white;
+    color:#0f2027;
+    border:2px solid #ccc;
+    font-size:12px;
+}
+
+.seat:hover:not(.booked):not(.reserved) {
+    transform:scale(1.1);
+    background:#f0f0f0;
+}
+
+.seat.booked {
+    background:#e74c3c;
+    color:white;
+    cursor:not-allowed;
+    border-color:#c0392b;
+    box-shadow: 0 0 15px rgba(231, 76, 60, 0.7);
+}
+
+.seat.reserved {
+    background:#95a5a6;
+    color:white;
+    cursor:not-allowed;
+    border-color:#7f8c8d;
+}
+
+.seat.selected {
+    background:#3498db;
+    color:white;
+    border-color:#2980b9;
+    box-shadow: 0 0 15px rgba(52, 152, 219, 0.8);
+}
+
+.aisle {
+    width:20px;
+    height:50px;
+}
+
+.seat-map-wrapper {
+    display: flex;
+    gap: 30px;
+    align-items: flex-start;
+}
+
+.seat-map-left {
+    flex: 1;
+}
+
+.bus-grid-layout {
+    background:#1f2a38;
+    padding:30px;
+    border-radius:14px;
+    margin-bottom:20px;
+    overflow-x:auto;
+    position: relative;
+}
+
+.driver-label {
+    position: absolute;
+    top: 30px;
+    right: 30px;
+    background: #2c3e50;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+    color: #b0bec5;
+}
+
+.bus-grid-seats {
+    display: inline-grid;
+    gap: 15px;
+    min-width: 100%;
+    justify-content: center;
+}
+
+.last-row-seats {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-top: 15px;
+}
+
+.seat-summary {
+    background:#1f2a38;
+    padding:25px;
+    border-radius:14px;
+    border-left:6px solid #22c1c3;
+    min-width: 280px;
+    height: fit-content;
+    position: sticky;
+    top: 20px;
+}
+
+.seat-summary h3 {
+    margin-top:0;
+}
+
+.summary-item {
+    display:flex;
+    justify-content:space-between;
+    padding:10px 0;
+    border-bottom:1px solid #2c3e50;
+}
+
+.summary-item:last-child {
+    border-bottom:none;
+}
+
+.summary-item.total {
+    font-size:18px;
+    font-weight:bold;
+    color:#22c1c3;
+}
+
+.action-buttons {
+    display:flex;
+    gap:15px;
+    margin-top:30px;
+}
+
+.action-btn {
+    flex:1;
+    padding:15px;
+    border:none;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+    font-weight:bold;
+    transition:0.2s;
+}
+
+.action-btn-primary {
+    background:#22c1c3;
+    color:white;
+}
+
+.action-btn-primary:hover:not(:disabled) {
+    background:#1ba0a0;
+}
+
+.action-btn-primary:disabled {
+    background:#7f8c8d;
+    cursor:not-allowed;
+    opacity:0.6;
+}
+
+.action-btn-secondary {
+    background:#2c3e50;
+    color:white;
+}
+
+.action-btn-secondary:hover {
+    background:#34495e;
+}
+
+@media (max-width: 768px) {
+    .bus-grid {
+        grid-template-columns:1fr;
+    }
+    
+    .modal-buttons,
+    .action-buttons {
+        flex-direction:column;
+    }
+
+    .seat-map-wrapper {
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .seat-summary {
+        min-width: 100%;
+        position: static;
+    }
+}
+
+</style>
+
+</head>
+
+<body>
+
+<header>
+<h1>Select Your Bus</h1>
+<p>Choose from available buses for your journey</p>
+</header>
+
+<div class="container">
+
+<!-- BUS LIST -->
+<div id="busListLoading" style="text-align: center; padding: 40px; font-size: 18px; color: #b0bec5;">
+    Loading buses...
+</div>
+<div id="busListError" style="display: none; text-align: center; padding: 40px; font-size: 18px; color: #e74c3c;">
+    Failed to load buses. Please refresh the page.
+</div>
+<div class="bus-grid" id="busList"></div>
+
+<!-- MODAL FOR BUS DETAILS -->
+<div class="modal-overlay" id="busModal">
+    <div class="modal-content">
+        <h2 id="modalBusPlate"></h2>
+        
+        <div class="modal-info">
+            <p>
+                <strong>Status:</strong>
+                <span id="modalBusStatus"></span>
+            </p>
+            <p>
+                <strong>Time:</strong>
+                <span id="modalBusTime"></span>
+            </p>
+            <p>
+                <strong>Destination:</strong>
+                <span id="modalDestination"></span>
+            </p>
+            <p>
+                <strong>Fare per Seat:</strong>
+                KSH <span id="modalFare"></span>
+            </p>
+        </div>
+
+        <div class="modal-buttons">
+            <button class="modal-btn modal-btn-primary" onclick="viewSeats()">
+                View Seats
+            </button>
+            <button class="modal-btn modal-btn-secondary" onclick="closeModal()">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- SEAT SELECTION -->
+<div class="seat-map-container" id="seatMapContainer">
+    <div class="seat-header">
+        <h2 id="seatMapBusTitle"></h2>
+        <p id="seatMapDestination"></p>
+    </div>
+
+    <div class="seat-map-wrapper">
+        <div class="seat-map-left">
+            <div class="bus-grid-layout">
+                <div class="driver-label">DRIVER</div>
+                <div class="bus-grid-seats" id="seatGrid"></div>
+            </div>
+        </div>
+
+        <div class="seat-summary">
+            <h3>Booking Summary</h3>
+            <div class="summary-item">
+                <span>Bus Plate:</span>
+                <strong id="summaryBusPlate">-</strong>
+            </div>
+            <div class="summary-item">
+                <span>Destination:</span>
+                <strong id="summaryDestination">-</strong>
+            </div>
+            <div class="summary-item">
+                <span>Seats:</span>
+                <strong id="summarySeats">None</strong>
+            </div>
+            <div class="summary-item">
+                <span>Fare per Seat:</span>
+                <strong>KSH <span id="seatSummaryFare">200</span></strong>
+            </div>
+            <div class="summary-item total">
+                <span>Total:</span>
+                <strong>KSH <span id="totalFareAmount">0</span></strong>
+            </div>
+
+            <button class="action-btn action-btn-primary" id="proceedBtn" disabled onclick="proceedToPayment()" style="width: 100%; margin-top: 20px;">
+                Proceed to Payment
+            </button>
+            <button class="action-btn action-btn-secondary" onclick="backToBusList()" style="width: 100%; margin-top: 10px;">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+</div>
+
+<script>
+
+// ========== BUS CONFIGURATION ==========
+const busLayouts = {
+    // NEW BUSES (45 seats): 2 left + aisle + 3 right
+    "KDA347R": { capacity: 45, type: "new" },
+    "KDC234K": { capacity: 45, type: "new" },
+    "KDE456K": { capacity: 45, type: "new" },
+    "KCY564K": { capacity: 45, type: "new" },
+    // OLD BUSES (29 seats): 2 left + aisle + 2 right
+    "KCU978S": { capacity: 29, type: "old" },
+    "KBX319D": { capacity: 29, type: "old" },
+    "KBX514D": { capacity: 29, type: "old" },
+    "KCU453E": { capacity: 29, type: "old" }
+};
+
+// ========== DATA ==========
+const busesData = {
+    athi: [
+        { plate: "KDA347R", type: "new", seats: 45, destination: "Syokimau/Nairobi" },
+        { plate: "KDC234K", type: "new", seats: 45, destination: "Syokimau/Nairobi" },
+        { plate: "KCU978S", type: "old", seats: 29, destination: "Syokimau/Nairobi" },
+        { plate: "KBX319D", type: "old", seats: 29, destination: "Syokimau/Nairobi" }
+    ],
+    nairobi: [
+        { plate: "KDE456K", type: "new", seats: 45, destination: "Syokimau/Athi" },
+        { plate: "KCY564K", type: "new", seats: 45, destination: "Syokimau/Athi" },
+        { plate: "KBX514D", type: "old", seats: 29, destination: "Syokimau/Athi" },
+        { plate: "KCU453E", type: "old", seats: 29, destination: "Syokimau/Athi" }
+    ]
+};
+
+let buses = [];
+
+function loadBusesFromAPI() {
+    fetch("http://localhost:3000/api/buses")
+        .then(response => response.json())
+        .then(data => {
+            console.log("API buses:", data);
+
+            // Filter by campus
+            const selectedCampus = localStorage.getItem("selectedCampus");
+
+            if (selectedCampus && busesData[selectedCampus]) {
+                const campusBuses = busesData[selectedCampus].map(campusBus => {
+                    // Find matching bus from API
+                    const apiBus = data.find(b => b.plate === campusBus.plate);
+
+                    return {
+                        plate: campusBus.plate,
+                        type: campusBus.type,
+                        capacity: apiBus ? apiBus.capacity : campusBus.seats,
+                        bookedSeats: apiBus ? apiBus.bookedSeats : [],
+                        time: "Next departure",
+                        campus: selectedCampus
+                    };
+                });
+
+                buses = campusBuses;
+            } else {
+                buses = data; // fallback if no campus selected
+            }
+
+            renderBusList();
+        })
+        .catch(error => {
+            console.error("Error loading buses:", error);
+            alert("Failed to load buses. Please refresh the page.");
+        });
+}
+
+// Load buses when page opens
+window.onload = loadBusesFromAPI;
+
+function convertTo12h(time24) {
+    const [hours, minutes] = time24.split(":");
+    const h = parseInt(hours);
+    const ampm = h >= 12 ? "pm" : "am";
+    const h12 = h % 12 || 12;
+    return `${h12}:${minutes}${ampm}`;
+}
+
+function loadBusesFromAdmin() {
+    const campus = localStorage.getItem("selectedCampus") || "";
+    const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
+
+    fetch("http://localhost:3000/api/buses")
+        .then(res => res.json())
+        .then(apiBuses => {
+
+            if (campus && busesData[campus]) {
+                buses = busesData[campus].map((busData, idx) => {
+                    const saveKey = `${campus}-${idx}`;
+                    const saved = savedBuses[saveKey];
+
+                    let status = "available";
+                    let time = "No schedule";
+
+                    if (saved) {
+                        status = saved.status;
+                        if (saved.scheduledTime) {
+                            time = `Leaving at ${convertTo12h(saved.scheduledTime)}`;
+                        }
+                    }
+
+                    // 🔥 Get booked seats from API
+                    const apiBus = apiBuses.find(b => b.plate === busData.plate);
+                    const bookedSeats = apiBus ? apiBus.bookedSeats : [];
+
+                    return {
+                        ...busData,
+                        status: status,
+                        time: time,
+                        bookedSeats: bookedSeats,
+                        capacity: apiBus ? apiBus.capacity : busData.seats
+                    };
+                });
+            }
+
+            console.log("Final buses with booked seats:", buses);
+            renderBusList();
+        })
+        .catch(err => {
+            console.error("Error loading buses:", err);
+        });
+}
+
+// Load when page opens
+window.onload = loadBusesFromAdmin;
+
+let destination = localStorage.getItem("selectedDestination") || "";
+let farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
+let selectedBus = null;
+let selectedSeats = [];
+
+// ========== RENDER BUS LIST ==========
+function renderBusList() {
+    const container = document.getElementById("busList");
+    container.innerHTML = "";
+
+    buses.forEach(bus => {
+        const card = document.createElement("div");
+        card.className = "bus-card";
+        
+        // Calculate available seats safely
+        const bookedSeats = bus.bookedSeats || [];
+        const bookedCount = Array.isArray(bookedSeats) ? bookedSeats.length : 0;
+        const capacity = bus.capacity || 45;
+        const availableSeats = capacity - bookedCount;
+        
+        const isFull = availableSeats <= 0;
+        const statusClass = isFull ? "departed" : "available";
+        const statusText = isFull ? "FULL" : `Available Seats: ${availableSeats}`;
+        
+        card.innerHTML = `
+            <div class="bus-info">
+                <div class="bus-plate">${bus.plate}</div>
+                <div class="${statusClass}">
+                    ${statusText}
+                </div>
+                <div class="time">${bus.type}</div>
+            </div>
+            <div class="arrow">➜</div>
+        `;
+
+        // Disable clicking if full
+        if (isFull) {
+            card.style.opacity = "0.6";
+            card.style.cursor = "not-allowed";
+            card.onclick = (e) => {
+                e.preventDefault();
+                alert("This bus is fully booked. Please select another bus.");
+            };
+        } else {
+            card.onclick = () => selectBus(bus);
+        }
+        
+        container.appendChild(card);
+    });
+}
+
+// ========== BUS & MODAL HANDLING ==========
+function selectBus(bus) {
+    const bookedSeats = bus.bookedSeats || [];
+    const bookedCount = Array.isArray(bookedSeats) ? bookedSeats.length : 0;
+    const capacity = bus.capacity || 45;
+    const availableSeats = capacity - bookedCount;
+    
+    if (availableSeats <= 0) {
+        alert("This bus is fully booked. Please select another bus.");
+        return;
+    }
+
+    selectedBus = bus;
+    selectedSeats = [];
+    
+    // Save selected bus plate to localStorage
+    localStorage.setItem("selectedBusPlate", bus.plate);
+    
+    document.getElementById("modalBusPlate").innerText = bus.plate;
+    document.getElementById("modalBusStatus").innerText = `Available Seats: ${availableSeats}`;
+    document.getElementById("modalBusTime").innerText = `Bus Type: ${bus.type}`;
+    document.getElementById("modalDestination").innerText = bus.route || destination.charAt(0).toUpperCase() + destination.slice(1);
+    document.getElementById("modalFare").innerText = farePerSeat;
+
+    document.getElementById("busModal").classList.add("active");
+}
+
+function closeModal() {
+    document.getElementById("busModal").classList.remove("active");
+    selectedBus = null;
+}
+
+function viewSeats() {
+    if (!selectedBus) return;
+
+    document.getElementById("busList").style.display = "none";
+    document.getElementById("busModal").classList.remove("active");
+    document.getElementById("seatMapContainer").classList.add("active");
+
+    renderSeatMap();
+}
+
+function backToBusList() {
+    document.getElementById("seatMapContainer").classList.remove("active");
+    document.getElementById("busList").style.display = "grid";
+    selectedSeats = [];
+    selectedBus = null;
+}
+
+// ========== SEAT MAP RENDERING ==========
+function renderSeatMap() {
+    document.getElementById("seatMapBusTitle").innerText = `Bus: ${selectedBus.plate}`;
+    document.getElementById("seatMapDestination").innerText = `Destination: ${destination.charAt(0).toUpperCase() + destination.slice(1)} | Fare: KSH ${farePerSeat} per seat`;
+    
+    // Update booking summary panel
+    document.getElementById("summaryBusPlate").innerText = selectedBus.plate;
+    document.getElementById("summaryDestination").innerText = destination.charAt(0).toUpperCase() + destination.slice(1);
+    document.getElementById("seatSummaryFare").innerText = farePerSeat;
+
+    const seatGrid = document.getElementById("seatGrid");
+    seatGrid.innerHTML = "";
+
+    let seatNum = 1;
+    
+    // Get bus configuration from busLayouts
+    const busConfig = busLayouts[selectedBus.plate];
+    if (!busConfig) {
+        console.error("Bus configuration not found for plate:", selectedBus.plate);
+        return;
+    }
+    
+    const capacity = busConfig.capacity;
+    const busType = busConfig.type;
+    
+    if (busType === "new") {
+        // NEW BUS: 45 seats
+        // Layout: 2 left + aisle + 3 right = 5 seats per row
+        // 8 normal rows (40 seats) + 1 last row (5 seats) = 45 total
+        
+        // Normal rows: 2-aisle-3 layout
+        const normalRowsDiv = document.createElement("div");
+        normalRowsDiv.style.display = "inline-grid";
+        normalRowsDiv.style.gridTemplateColumns = "repeat(6, 1fr)";
+        normalRowsDiv.style.gap = "15px";
+        normalRowsDiv.style.width = "100%";
+        normalRowsDiv.style.justifyContent = "center";
+        normalRowsDiv.style.marginBottom = "15px";
+        
+        // First 8 rows (40 seats)
+        for (let row = 0; row < 8; row++) {
+            // Left: 2 seats
+            for (let col = 0; col < 2; col++) {
+                normalRowsDiv.appendChild(createSeatElement(seatNum));
+                seatNum++;
+            }
+            // Aisle
+            const aisle = document.createElement("div");
+            aisle.className = "aisle";
+            normalRowsDiv.appendChild(aisle);
+            // Right: 3 seats
+            for (let col = 0; col < 3; col++) {
+                normalRowsDiv.appendChild(createSeatElement(seatNum));
+                seatNum++;
+            }
+        }
+        seatGrid.appendChild(normalRowsDiv);
+        
+        // Last row: 5 seats across
+        const lastRowDiv = document.createElement("div");
+        lastRowDiv.className = "last-row-seats";
+        for (let i = 0; i < 5; i++) {
+            lastRowDiv.appendChild(createSeatElement(seatNum));
+            seatNum++;
+        }
+        seatGrid.appendChild(lastRowDiv);
+        
+    } else if (busType === "old") {
+        // OLD BUS: 29 seats
+        // Layout: 2 left + aisle + 2 right = 4 seats per row
+        // 6 normal rows (24 seats) + 1 last row (5 seats) = 29 total
+        
+        // Normal rows: 2-aisle-2 layout
+        const normalRowsDiv = document.createElement("div");
+        normalRowsDiv.style.display = "inline-grid";
+        normalRowsDiv.style.gridTemplateColumns = "repeat(5, 1fr)";
+        normalRowsDiv.style.gap = "15px";
+        normalRowsDiv.style.width = "100%";
+        normalRowsDiv.style.justifyContent = "center";
+        normalRowsDiv.style.marginBottom = "15px";
+        
+        // First 6 rows (24 seats)
+        for (let row = 0; row < 6; row++) {
+            // Left: 2 seats
+            for (let col = 0; col < 2; col++) {
+                normalRowsDiv.appendChild(createSeatElement(seatNum));
+                seatNum++;
+            }
+            // Aisle
+            const aisle = document.createElement("div");
+            aisle.className = "aisle";
+            normalRowsDiv.appendChild(aisle);
+            // Right: 2 seats
+            for (let col = 0; col < 2; col++) {
+                normalRowsDiv.appendChild(createSeatElement(seatNum));
+                seatNum++;
+            }
+        }
+        seatGrid.appendChild(normalRowsDiv);
+        
+        // Last row: 5 seats across (to make 29 total)
+        const lastRowDiv = document.createElement("div");
+        lastRowDiv.className = "last-row-seats";
+        for (let i = 0; i < 5; i++) {
+            lastRowDiv.appendChild(createSeatElement(seatNum));
+            seatNum++;
+        }
+        seatGrid.appendChild(lastRowDiv);
+    }
+}
+
+function createSeatElement(seatNum) {
+    const seatDiv = document.createElement("div");
+    seatDiv.className = "seat";
+    seatDiv.innerText = seatNum;
+
+    // Check if seat is reserved (seats 1 and 2)
+    if ([1, 2].includes(seatNum)) {
+        seatDiv.classList.add("reserved");
+        seatDiv.onclick = null;
+    } else if (selectedBus.bookedSeats.includes(seatNum)) {
+        seatDiv.classList.add("booked");
+        seatDiv.onclick = null;
+    } else {
+        seatDiv.onclick = () => toggleSeat(seatNum, seatDiv);
+    }
+
+    return seatDiv;
+}
+
+// ========== SEAT SELECTION HANDLING ==========
+function toggleSeat(seatNum, seatDiv) {
+    if (seatDiv.classList.contains("booked")) return;
+    if (seatDiv.classList.contains("reserved")) return;
+
+    if (selectedSeats.includes(seatNum)) {
+        selectedSeats = selectedSeats.filter(s => s !== seatNum);
+        seatDiv.classList.remove("selected");
+    } else {
+        selectedSeats.push(seatNum);
+        seatDiv.classList.add("selected");
+    }
+
+    updateSeatSummary();
+}
+
+function updateSeatSummary() {
+    const count = selectedSeats.length;
+    const total = count * farePerSeat;
+    
+    // Sort seats for display
+    const sortedSeats = [...selectedSeats].sort((a, b) => a - b);
+
+    // Update summary panel
+    document.getElementById("summarySeats").innerText = sortedSeats.length > 0 ? sortedSeats.join(", ") : "None";
+    document.getElementById("totalFareAmount").innerText = total;
+
+    // Enable/disable proceed button
+    document.getElementById("proceedBtn").disabled = count === 0;
+}
+
+// ========== PAYMENT FLOW ==========
+async function proceedToPayment() {
+    console.log("Selected seats:", selectedSeats);
+
+    if (selectedSeats.length === 0) {
+        alert("Please select at least one seat.");
+        return;
+    }
+
+    const busPlate = localStorage.getItem("selectedBusPlate");
+    const total = selectedSeats.length * farePerSeat;
+    console.log("Bus plate:", busPlate);
+    console.log("Total fare:", total);
+
+    try {
+        const response = await fetch("http://localhost:3000/api/bookings", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                busPlate: busPlate,
+                seats: selectedSeats,
+                destination: destination,
+                totalAmount: total
+            })
+        });
+
+        console.log("Response status:", response.status);
+
+        const data = await response.json();
+        console.log("Booking response:", data);
+
+        if (data.success || data.booking_id) {
+            // Extract booking ID from response
+            const bookingId = data.booking_id || data.bookingId;
+            
+            // SAVE TO LOCALSTORAGE BEFORE REDIRECT
+            localStorage.setItem("bookingId", bookingId);
+            localStorage.setItem("selectedSeats", JSON.stringify(selectedSeats));
+            localStorage.setItem("totalAmount", total);
+
+            console.log("Booking saved to localStorage:", {
+                bookingId: bookingId,
+                selectedSeats: selectedSeats,
+                totalAmount: total
+            });
+
+            // REDIRECT TO PAYMENT (NO QUERY PARAMS)
+            window.location.href = "payment.html";
+        } else {
+            alert(data.error || "Booking failed");
+        }
+
+    } catch (error) {
+        console.error("Booking error:", error);
+        alert("Server error during booking: " + error.message);
+    }
+}
+
+// ========== API FUNCTIONS ==========
+async function loadBusesFromAPI() {
+    const loadingEl = document.getElementById("busListLoading");
+    const errorEl = document.getElementById("busListError");
+    const busListEl = document.getElementById("busList");
+    
+    try {
+        // Show loading state
+        loadingEl.style.display = "block";
+        errorEl.style.display = "none";
+        busListEl.innerHTML = "";
+        
+        const response = await fetch("http://localhost:3000/api/buses");
+        
+        if (!response.ok) {
+            throw new Error(`API error: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Populate buses array from API response
+        buses = Array.isArray(data) ? data : data.buses || [];
+        
+        if (buses.length === 0) {
+            throw new Error("No buses available");
+        }
+        
+        // Hide loading, show buses
+        loadingEl.style.display = "none";
+        renderBusList();
+        
+    } catch (error) {
+        console.error("Failed to load buses:", error);
+        loadingEl.style.display = "none";
+        errorEl.style.display = "block";
+        busListEl.innerHTML = "";
+    }
+}
+
+// ========== INITIALIZATION ==========
+document.addEventListener("DOMContentLoaded", () => {
+    if (!destination || !farePerSeat) {
+        alert("Please complete your travel details on the previous page.");
+        window.location.href = "campus.html";
+        return;
+    }
+
+    loadBusesFromAPI();
+});
+
+</script>
+
+</body>
+
+</html>

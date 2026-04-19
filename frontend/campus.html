@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Select Campus</title>
+
+<link rel="stylesheet" href="css/styles.css">
+
+<style>
+
+.page-container{
+max-width:500px;
+margin:auto;
+padding:40px 20px;
+text-align:center;
+}
+
+.select-box{
+width:100%;
+padding:15px;
+border-radius:10px;
+border:none;
+margin-top:15px;
+font-size:16px;
+}
+
+.card-btn{
+margin-top:20px;
+background:#1da1f2;
+padding:15px;
+border-radius:30px;
+border:none;
+color:white;
+font-size:18px;
+cursor:pointer;
+width:100%;
+}
+
+.card-btn:hover{
+background:#0c8ddb;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="page-container">
+
+<h2>Select Travel Details</h2>
+
+<!-- Campus -->
+
+<select id="campus" class="select-box">
+<option value="">Select Campus</option>
+<option value="athi">Athi River Campus</option>
+<option value="nairobi">Nairobi Campus</option>
+</select>
+
+<!-- Day -->
+
+<select id="day" class="select-box" onchange="loadTimes()">
+<option value="">Select Day</option>
+<option value="monday">Monday</option>
+<option value="tuesday">Tuesday</option>
+<option value="wednesday">Wednesday</option>
+<option value="thursday">Thursday</option>
+<option value="friday">Friday</option>
+<option value="saturday">Saturday</option>
+<option value="sunday">Sunday</option>
+</select>
+
+<!-- Time -->
+
+<select id="time" class="select-box">
+<option value="">Select Time</option>
+</select>
+
+<!-- Destination -->
+
+<select id="destination" class="select-box" onchange="updateDestinationDisplay()">
+<option value="">Select Destination</option>
+</select>
+
+<button class="card-btn" onclick="searchBuses()">
+Show Available Buses
+</button>
+
+</div>
+
+<script>
+
+const campusSelect = document.getElementById("campus");
+const destSelect = document.getElementById("destination");
+
+campusSelect.addEventListener("change", () => {
+    destSelect.innerHTML = '<option value="">Select Destination</option>';
+    const campus = campusSelect.value;
+    if (campus === "nairobi") {
+        destSelect.innerHTML += '<option value="syokimau">Syokimau</option>' +
+                                '<option value="athi">Athi River Campus</option>';
+    } else if (campus === "athi") {
+        destSelect.innerHTML += '<option value="syokimau">Syokimau</option>' +
+                                '<option value="nairobi">Nairobi Campus</option>';
+    }
+});
+
+function updateDestinationDisplay() {
+    // Placeholder for future enhancements
+}
+
+function loadTimes(){
+
+const day=document.getElementById("day").value
+const timeSelect=document.getElementById("time")
+
+timeSelect.innerHTML=""
+
+let times=[]
+
+if(day==="monday"||day==="wednesday"||day==="thursday"||day==="friday"){
+
+times=["08:00","16:00","17:00"]
+
+}
+
+else if(day==="tuesday"){
+
+times=["13:00","16:00","17:00"]
+
+}
+
+else if(day==="saturday"){
+
+times=["10:00"]
+
+}
+
+else{
+
+times=[]
+}
+
+if(times.length===0){
+
+timeSelect.innerHTML="<option>No buses available</option>"
+
+return
+
+}
+
+times.forEach(t=>{
+
+const option=document.createElement("option")
+
+option.value=t
+option.text=t
+
+timeSelect.appendChild(option)
+
+})
+
+}
+
+function searchBuses(){
+
+const campus=document.getElementById("campus").value
+const day=document.getElementById("day").value
+const time=document.getElementById("time").value
+const destination=document.getElementById("destination").value
+
+if(!campus||!day||!time||!destination){
+
+alert("Please select campus, day, time, and destination")
+
+return
+
+}
+
+// Calculate fare based on destination
+let farePerSeat = 200;  // default fare for Nairobi-Athi or Athi-Nairobi
+if(destination === "syokimau") {
+    farePerSeat = 150;  // short-distance fare
+}
+
+localStorage.setItem("selectedCampus",campus)
+localStorage.setItem("selectedDay",day)
+localStorage.setItem("selectedTime",time)
+localStorage.setItem("selectedDestination",destination)
+localStorage.setItem("farePerSeat",farePerSeat)
+
+window.location.href="trips.html"
+
+}
+
+</script>
+
+</body>
+</html>
