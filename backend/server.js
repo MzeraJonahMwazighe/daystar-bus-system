@@ -235,7 +235,7 @@ app.get('/api/ticket/:bookingId', (req, res) => {
 });
 
 // Serve static files from frontend
-app.use(express.static(path.join(__dirname, '../frontend')));
+app.use(express.static(path.join(__dirname, '..')));
 
 // Routes
 app.use('/api/buses', require('./routes/buses'));
@@ -249,7 +249,7 @@ app.get('/api/health', (req, res) => {
 
 // Serve main page
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/index.html'));
+   res.sendFile(path.join(__dirname, '../index.html'));
 });
 
 // Error handling middleware
