@@ -206,12 +206,60 @@ header p{
     color:#b0bec5;
 }
 
-.bus-grid-layout {
+.seat-legend {
     background:#1f2a38;
-    padding:30px;
+    padding:20px;
     border-radius:14px;
     margin-bottom:20px;
-    overflow-x:auto;
+    display:flex;
+    gap:30px;
+    flex-wrap:wrap;
+    justify-content:center;
+    border-left:6px solid #22c1c3;
+}
+
+.legend-item {
+    display:flex;
+    align-items:center;
+    gap:10px;
+    font-size:14px;
+    color:#b0bec5;
+}
+
+.legend-box {
+    width:30px;
+    height:30px;
+    border-radius:6px;
+    border:2px solid #ccc;
+}
+
+.legend-box.available {
+    background:white;
+}
+
+.legend-box.selected {
+    background:#3498db;
+    border-color:#2980b9;
+}
+
+.legend-box.reserved {
+    background:#95a5a6;
+    border-color:#7f8c8d;
+}
+
+.legend-box.booked {
+    background:#e74c3c;
+    border-color:#c0392b;
+}
+
+@media (max-width: 768px) {
+    .bus-grid-seats {
+        background:#1f2a38;
+        padding:30px;
+        border-radius:14px;
+        margin-bottom:20px;
+        overflow-x:auto;
+    }
 }
 
 .bus-grid-seats {
@@ -472,6 +520,25 @@ header p{
         <p id="seatMapDestination"></p>
     </div>
 
+    <div class="seat-legend">
+        <div class="legend-item">
+            <div class="legend-box available"></div>
+            <span>Available</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box selected"></div>
+            <span>Selected</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box reserved"></div>
+            <span>Reserved</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-box booked"></div>
+            <span>Booked</span>
+        </div>
+    </div>
+
     <div class="seat-map-wrapper">
         <div class="seat-map-left">
             <div class="bus-grid-layout">
@@ -586,8 +653,16 @@ function loadBusesFromAPI() {
         });
 }
 
-// Load buses when page opens
-window.onload = loadBusesFromAPI;
+// ========== INITIALIZATION ==========
+document.addEventListener("DOMContentLoaded", () => {
+    if (!destination || !farePerSeat) {
+        alert("Please complete your travel details on the previous page.");
+        window.location.href = "campus.html";
+        return;
+    }
+
+    loadBusesFromAPI();
+});
 
 function convertTo12h(time24) {
     const [hours, minutes] = time24.split(":");
@@ -596,54 +671,6 @@ function convertTo12h(time24) {
     const h12 = h % 12 || 12;
     return `${h12}:${minutes}${ampm}`;
 }
-
-function loadBusesFromAdmin() {
-    const campus = localStorage.getItem("selectedCampus") || "";
-    const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
-
-    fetch("http://localhost:3000/api/buses")
-        .then(res => res.json())
-        .then(apiBuses => {
-
-            if (campus && busesData[campus]) {
-                buses = busesData[campus].map((busData, idx) => {
-                    const saveKey = `${campus}-${idx}`;
-                    const saved = savedBuses[saveKey];
-
-                    let status = "available";
-                    let time = "No schedule";
-
-                    if (saved) {
-                        status = saved.status;
-                        if (saved.scheduledTime) {
-                            time = `Leaving at ${convertTo12h(saved.scheduledTime)}`;
-                        }
-                    }
-
-                    // 🔥 Get booked seats from API
-                    const apiBus = apiBuses.find(b => b.plate === busData.plate);
-                    const bookedSeats = apiBus ? apiBus.bookedSeats : [];
-
-                    return {
-                        ...busData,
-                        status: status,
-                        time: time,
-                        bookedSeats: bookedSeats,
-                        capacity: apiBus ? apiBus.capacity : busData.seats
-                    };
-                });
-            }
-
-            console.log("Final buses with booked seats:", buses);
-            renderBusList();
-        })
-        .catch(err => {
-            console.error("Error loading buses:", err);
-        });
-}
-
-// Load when page opens
-window.onload = loadBusesFromAdmin;
 
 let destination = localStorage.getItem("selectedDestination") || "";
 let farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
@@ -658,17 +685,17 @@ function renderBusList() {
     buses.forEach(bus => {
         const card = document.createElement("div");
         card.className = "bus-card";
-        
-        // Calculate available seats safely
+
+        // Calculate available seats - count reserved and booked status
         const bookedSeats = bus.bookedSeats || [];
-        const bookedCount = Array.isArray(bookedSeats) ? bookedSeats.length : 0;
+        const bookedCount = bookedSeats.length;
         const capacity = bus.capacity || 45;
         const availableSeats = capacity - bookedCount;
-        
+
         const isFull = availableSeats <= 0;
         const statusClass = isFull ? "departed" : "available";
         const statusText = isFull ? "FULL" : `Available Seats: ${availableSeats}`;
-        
+
         card.innerHTML = `
             <div class="bus-info">
                 <div class="bus-plate">${bus.plate}</div>
@@ -691,7 +718,7 @@ function renderBusList() {
         } else {
             card.onclick = () => selectBus(bus);
         }
-        
+
         container.appendChild(card);
     });
 }
@@ -699,10 +726,10 @@ function renderBusList() {
 // ========== BUS & MODAL HANDLING ==========
 function selectBus(bus) {
     const bookedSeats = bus.bookedSeats || [];
-    const bookedCount = Array.isArray(bookedSeats) ? bookedSeats.length : 0;
+    const bookedCount = bookedSeats.length;
     const capacity = bus.capacity || 45;
     const availableSeats = capacity - bookedCount;
-    
+
     if (availableSeats <= 0) {
         alert("This bus is fully booked. Please select another bus.");
         return;
@@ -710,10 +737,10 @@ function selectBus(bus) {
 
     selectedBus = bus;
     selectedSeats = [];
-    
+
     // Save selected bus plate to localStorage
     localStorage.setItem("selectedBusPlate", bus.plate);
-    
+
     document.getElementById("modalBusPlate").innerText = bus.plate;
     document.getElementById("modalBusStatus").innerText = `Available Seats: ${availableSeats}`;
     document.getElementById("modalBusTime").innerText = `Bus Type: ${bus.type}`;
@@ -731,11 +758,30 @@ function closeModal() {
 function viewSeats() {
     if (!selectedBus) return;
 
-    document.getElementById("busList").style.display = "none";
-    document.getElementById("busModal").classList.remove("active");
-    document.getElementById("seatMapContainer").classList.add("active");
+    // Refresh seat status from API before showing
+    refreshSeatStatus().then(() => {
+        document.getElementById("busList").style.display = "none";
+        document.getElementById("busModal").classList.remove("active");
+        document.getElementById("seatMapContainer").classList.add("active");
+        renderSeatMap();
+    });
+}
 
-    renderSeatMap();
+// Refresh seat status from API
+async function refreshSeatStatus() {
+    try {
+        const response = await fetch(`http://localhost:3000/api/buses/${selectedBus.plate}`);
+        if (!response.ok) {
+            console.error("Failed to refresh seat status");
+            return;
+        }
+
+        const busData = await response.json();
+        // Update the selected bus with fresh seat data
+        selectedBus.bookedSeats = busData.bookedSeats || [];
+    } catch (error) {
+        console.error("Error refreshing seat status:", error);
+    }
 }
 
 function backToBusList() {
@@ -861,14 +907,32 @@ function createSeatElement(seatNum) {
     seatDiv.className = "seat";
     seatDiv.innerText = seatNum;
 
-    // Check if seat is reserved (seats 1 and 2)
-    if ([1, 2].includes(seatNum)) {
-        seatDiv.classList.add("reserved");
-        seatDiv.onclick = null;
-    } else if (selectedBus.bookedSeats.includes(seatNum)) {
-        seatDiv.classList.add("booked");
-        seatDiv.onclick = null;
+    // Find seat in bookedSeats array
+    const seatData = selectedBus.bookedSeats.find(s => {
+        if (typeof s === 'number') {
+            // Old format: just seat number, treat as booked
+            return s === seatNum;
+        }
+        // New format: object with seat_number and status
+        return s.seat_number === seatNum;
+    });
+
+    if (seatData) {
+        // Handle both old and new formats
+        const status = typeof seatData === 'number' ? 'booked' : seatData.status;
+
+        if (status === "booked") {
+            seatDiv.classList.add("booked");
+            seatDiv.onclick = null;
+        } else if (status === "reserved") {
+            seatDiv.classList.add("reserved");
+            seatDiv.onclick = null;
+        } else {
+            // Available seat
+            seatDiv.onclick = () => toggleSeat(seatNum, seatDiv);
+        }
     } else {
+        // Available seat
         seatDiv.onclick = () => toggleSeat(seatNum, seatDiv);
     }
 
@@ -971,32 +1035,32 @@ async function loadBusesFromAPI() {
     const loadingEl = document.getElementById("busListLoading");
     const errorEl = document.getElementById("busListError");
     const busListEl = document.getElementById("busList");
-    
+
     try {
         // Show loading state
         loadingEl.style.display = "block";
         errorEl.style.display = "none";
         busListEl.innerHTML = "";
-        
+
         const response = await fetch("http://localhost:3000/api/buses");
-        
+
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
-        
+
         const data = await response.json();
-        
+
         // Populate buses array from API response
         buses = Array.isArray(data) ? data : data.buses || [];
-        
+
         if (buses.length === 0) {
             throw new Error("No buses available");
         }
-        
+
         // Hide loading, show buses
         loadingEl.style.display = "none";
         renderBusList();
-        
+
     } catch (error) {
         console.error("Failed to load buses:", error);
         loadingEl.style.display = "none";
