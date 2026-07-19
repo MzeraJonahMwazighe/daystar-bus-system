@@ -2,10 +2,33 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
+const http = require('http');
 const sqlite3 = require('sqlite3').verbose();
+const mongoose = require('mongoose');
+const { Server } = require('socket.io');
+const { calculateFare, generateTicketNumber, validatePhoneNumber } = require('./lib/bookingHelpers');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: '*'
+    }
+});
+app.set('io', io);
+
+if (process.env.MONGODB_URI) {
+    mongoose.connect(process.env.MONGODB_URI)
+        .then(() => console.log('Connected to MongoDB'))
+        .catch((err) => console.error('MongoDB connection error:', err.message));
+} else {
+    console.log('MongoDB URI not configured; using SQLite for now');
+}
+
+io.on('connection', (socket) => {
+    socket.on('join-admin', () => socket.join('admin'));
+});
 
 // Initialize database connection globally
 const dbPath = path.join(__dirname, 'database/bus.db');
@@ -180,33 +203,48 @@ app.post('/api/book', (req, res) => {
     });
 });
 app.post('/api/pay', (req, res) => {
-    const { bookingId } = req.body;
+    const { bookingId, phone, passengerName } = req.body;
 
     if (!bookingId) {
-        return res.json({ error: "Booking ID is required" });
+        return res.status(400).json({ error: "Booking ID is required" });
     }
 
-    // Update booking status to 'booked' when payment is successful
+    if (!validatePhoneNumber(phone)) {
+        return res.status(400).json({ error: "Please enter a valid M-Pesa number" });
+    }
+
+    const ticketId = generateTicketNumber();
+
     db.run(
         "UPDATE bookings SET status = 'booked' WHERE booking_id = ?",
         [bookingId],
         function(err) {
             if (err) {
                 console.error(err);
-                return res.json({ error: "Failed to update payment" });
+                return res.status(500).json({ error: "Failed to update payment" });
             }
 
-            // Also update seat_reservations status to 'booked'
             db.run(
                 "UPDATE seat_reservations SET status = 'booked' WHERE booking_id = ?",
                 [bookingId],
                 function(err) {
                     if (err) {
                         console.error(err);
-                        return res.json({ error: "Failed to update seat reservations" });
+                        return res.status(500).json({ error: "Failed to update seat reservations" });
                     }
 
-                    res.json({ success: true });
+                    db.run(
+                        "INSERT INTO tickets (ticket_id, booking_id, bus_id, seats, destination, amount, qr_data, status) VALUES (?, ?, (SELECT bus_id FROM bookings WHERE booking_id = ?), (SELECT seats FROM bookings WHERE booking_id = ?), (SELECT destination FROM bookings WHERE booking_id = ?), (SELECT total_amount FROM bookings WHERE booking_id = ?), ?, 'active')",
+                        [ticketId, bookingId, bookingId, bookingId, bookingId, bookingId, JSON.stringify({ ticket: ticketId, passengerName, phone })],
+                        function(err) {
+                            if (err) {
+                                console.error(err);
+                            }
+
+                            app.get('io').to('admin').emit('payment:completed', { bookingId, ticketId, passengerName, phone });
+                    res.json({ success: true, ticketId, passengerName, phone });
+                        }
+                    );
                 }
             );
         }
@@ -222,14 +260,28 @@ app.get('/api/ticket/:bookingId', (req, res) => {
         (err, row) => {
             if (err) {
                 console.error(err);
-                return res.json({ error: "Database error" });
+                return res.status(500).json({ error: "Database error" });
             }
 
             if (!row) {
-                return res.json({ error: "Ticket not found" });
+                return res.status(404).json({ error: "Ticket not found" });
             }
 
-            res.json(row);
+            db.get(
+                "SELECT ticket_id, qr_data FROM tickets WHERE booking_id = ? ORDER BY id DESC LIMIT 1",
+                [bookingId],
+                (err2, ticketRow) => {
+                    if (err2) {
+                        console.error(err2);
+                    }
+
+                    res.json({
+                        ...row,
+                        ticket_id: ticketRow?.ticket_id || null,
+                        qr_data: ticketRow?.qr_data || null
+                    });
+                }
+            );
         }
     );
 });
@@ -241,6 +293,8 @@ app.use(express.static(path.join(__dirname, '..')));
 app.use('/api/buses', require('./routes/buses'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/payments', require('./routes/payments'));
+app.use('/api/admin', require('./routes/admin'));
+app.use('/api/mpesa', require('./routes/mpesa'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -260,7 +314,7 @@ app.use((err, req, res, next) => {
 
 // Start server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`Daystar Bus Booking System running on port ${3000}`);
-    console.log(`Server: http://localhost:${3000}`);
+server.listen(PORT, () => {
+    console.log(`Daystar Bus Booking System running on port ${PORT}`);
+    console.log(`Server: http://localhost:${PORT}`);
 });

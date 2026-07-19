@@ -439,12 +439,25 @@ function showDashboard() {
     }
 }
 
-function renderBusList(campus, container) {
+async function renderBusList(campus, container) {
     container.innerHTML = "";
     let buses = busesData[campus];
-    
-    // Load saved schedules from localStorage
     const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
+
+    try {
+        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/admin/bookings`);
+        const bookings = response.ok ? await response.json() : [];
+        const bookingSummary = document.createElement('div');
+        bookingSummary.className = 'bus-card';
+        bookingSummary.innerHTML = `
+            <h3>Bookings</h3>
+            <p><strong>Active records:</strong> ${bookings.length}</p>
+            <p>Use the trip form below to create a new trip for a selected bus.</p>
+        `;
+        container.appendChild(bookingSummary);
+    } catch (error) {
+        console.error('Failed to load admin bookings', error);
+    }
     
     buses.forEach((bus, idx) => {
         // Merge with saved data if it exists
@@ -516,7 +529,7 @@ function updateScheduleTimes() {
     }
 }
 
-function saveSchedule() {
+async function saveSchedule() {
     const day = document.getElementById("scheduleDay").value;
     const time = document.getElementById("scheduleTime").value;
     const status = document.getElementById("scheduleStatus").value;
@@ -525,8 +538,33 @@ function saveSchedule() {
         alert("Please select a day and time.");
         return;
     }
+
+    const busPlate = document.getElementById("scheduleBusPlate").value;
+    const bus = busesData[currentAdmin].find(item => item.plate === busPlate);
+    const payload = {
+        bus_id: bus ? bus.plate : busPlate,
+        route: currentAdmin === 'athi' ? 'athi-nairobi' : 'nairobi-athi',
+        departure_time: time,
+        trip_date: day,
+        status: status === 'departed' ? 'departed' : 'active'
+    };
+
+    try {
+        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/admin/trips`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save trip');
+        }
+    } catch (error) {
+        console.error('Trip save failed', error);
+        alert(error.message);
+        return;
+    }
     
-    // Load existing schedules from localStorage
     let savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
     
     const saveKey = `${currentAdmin}-${editingBusIdx}`;
@@ -538,7 +576,6 @@ function saveSchedule() {
     
     localStorage.setItem("busSchedules", JSON.stringify(savedBuses));
     
-    // Re-render the bus list
     const container = currentAdmin === "athi" ? document.getElementById("athiBuses") : document.getElementById("nairoiBuses");
     renderBusList(currentAdmin, container);
     

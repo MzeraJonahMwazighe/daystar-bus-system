@@ -1,0 +1,689 @@
+PHASE 1 - REQUIREMENTS
+✔ Vision
+✔ Stakeholders
+✔ Functional Requirements
+✔ Non Functional Requirements
+
+PHASE 2 - SYSTEM DESIGN
+✔ System Architecture
+✔ Technology Stack
+✔ Database Definition
+✔ Logical Database Model
+⬜ Physical Database Model
+⬜ Database Constraints
+⬜ Index Strategy
+⬜ Backup Strategy
+⬜ Security Model
+
+PHASE 3 - UI/UX
+⬜ Wireframes
+⬜ User Journey
+⬜ Design System
+⬜ Component Library
+⬜ Responsive Layout
+
+PHASE 4 - DEVELOPMENT
+⬜ Sprint 1
+⬜ Sprint 2
+⬜ Sprint 3
+...
+
+PHASE 5
+⬜ Testing
+
+PHASE 6
+⬜ Deployment
+
+PHASE 7
+⬜ Maintenance
+Document 01
+Daystar University Transport Management System
+Software Architecture Document (Version 1.0)
+1. Project Overview
+Project Name
+
+Daystar University Transport Management System (DTMS)
+
+Vision
+
+The Daystar University Transport Management System (DTMS) is a centralized digital platform designed to modernize and automate the management of university transportation services.
+
+The objective is to replace manual passenger management, paper records, manual M-Pesa verification, and inefficient bus scheduling with a secure, scalable, and intelligent transport management platform.
+
+The system serves students, transport administrators, drivers, and ICT while remaining scalable for future university expansion.
+
+2. Objectives
+
+The system aims to:
+
+• Allow students to book buses online.
+
+• Digitize seat allocation.
+
+• Prevent double booking.
+
+• Integrate M-Pesa payments.
+
+• Generate secure QR tickets.
+
+• Allow administrators to manage buses and trips.
+
+• Assign buses and drivers.
+
+• Support university event transportation.
+
+• Produce financial and operational reports.
+
+• Operate reliably even during temporary network outages.
+
+3. Stakeholders
+Primary Users
+
+Students
+
+Campus Transport Administrators
+
+Drivers
+
+University ICT Department
+
+University Management
+
+4. System Users
+Student
+
+Students do not require accounts.
+
+Students can
+
+View available trips
+
+Book seats
+
+Pay using M-Pesa
+
+Download tickets
+
+View booking status
+
+Cancel bookings within policy limits
+
+Campus Administrator
+
+Each campus has its own administrator.
+
+Responsibilities include
+
+Managing buses
+
+Managing trips
+
+Assigning buses
+
+Assigning drivers
+
+Publishing schedules
+
+Managing event transportation
+
+Scanning tickets
+
+Generating reports
+
+Monitoring departures
+
+Driver
+
+Drivers have a lightweight dashboard.
+
+Drivers can
+
+View assigned trips
+
+View passenger count
+
+View passenger list
+
+Mark trip as ready
+
+Mark trip as departed
+
+Super Administrator (Future)
+
+The architecture supports future expansion to include
+
+Transport Director
+
+University ICT
+
+Finance Office
+
+University Management
+
+5. Campus Structure
+
+Daystar University currently operates two campuses.
+
+Athi River Campus (Main Campus)
+
+Nairobi Campus
+
+The system is designed so additional campuses can be added without modifying source code.
+
+6. Bus Operations
+
+The university owns multiple buses.
+
+Large Bus
+
+67 Seats
+
+Mini Bus
+
+39 Seats
+
+Every bus has
+
+Bus Number
+
+Registration Plate
+
+Capacity
+
+Current Status
+
+Assigned Driver
+
+Maintenance History
+
+Bus Status
+
+Every bus has one operational state.
+
+Available
+
+Assigned to Regular Trip
+
+Assigned to Event
+
+Maintenance
+
+Out of Service
+
+In Transit
+
+7. Trip Types
+
+The system supports two categories.
+
+Regular Trip
+
+Example
+
+Athi River
+
+↓
+
+Nairobi
+
+↓
+
+8:00 AM
+
+Students book seats normally.
+
+Event Trip
+
+Example
+
+Football Tournament
+
+Mission Trip
+
+Graduation
+
+Academic Tour
+
+Conference
+
+Industrial Visit
+
+For every event trip the administrator chooses
+
+Booking Open
+
+or
+
+Booking Closed
+
+If booking is closed,
+
+students cannot reserve seats.
+
+Passengers are added manually by the administrator.
+
+8. Trip Lifecycle
+
+Every trip moves through predefined stages.
+
+Draft
+
+↓
+
+Published
+
+↓
+
+Booking Open
+
+↓
+
+Booking Closed
+
+↓
+
+Boarding
+
+↓
+
+Departed
+
+↓
+
+Completed
+
+↓
+
+Archived
+
+9. Booking Flow
+
+Student
+
+↓
+
+Open Website / PWA
+
+↓
+
+Choose Campus
+
+↓
+
+View Available Trips
+
+↓
+
+Select Trip
+
+↓
+
+Choose Seats
+
+↓
+
+Seats Reserved
+
+↓
+
+5 Minute Timer Starts
+
+↓
+
+M-Pesa STK Push
+
+↓
+
+Payment Successful
+
+↓
+
+Booking Confirmed
+
+↓
+
+QR Ticket Generated
+
+↓
+
+Ticket Downloaded
+
+↓
+
+Boarding
+
+10. Seat Reservation Logic
+
+Seats are never booked immediately.
+
+Seat Selected
+
+↓
+
+Reserved
+
+↓
+
+5 Minutes
+
+↓
+
+Payment Success
+
+↓
+
+Booked
+
+OR
+
+↓
+
+Payment Failed
+
+↓
+
+Reservation Removed
+
+↓
+
+Seat Released
+
+11. Ticket System
+
+Every ticket contains
+
+Unique Ticket Number
+
+Booking Number
+
+QR Code
+
+Trip
+
+Bus
+
+Seats
+
+Amount Paid
+
+Date
+
+Time
+
+Status
+
+Students may download tickets only twice.
+
+12. Ticket Verification
+
+Instead of manually checking M-Pesa messages,
+
+Campus administrators scan QR codes.
+
+Ticket
+
+↓
+
+QR Scan
+
+↓
+
+Database Verification
+
+↓
+
+Passenger Marked
+
+Boarded
+
+↓
+
+Driver Dashboard Updated
+
+13. Driver Workflow
+
+Driver logs in
+
+↓
+
+Views assigned trip
+
+↓
+
+Views booked passengers
+
+↓
+
+Marks Ready
+
+↓
+
+Receives boarding confirmation
+
+↓
+
+Trip departs
+
+14. Payment System
+
+Payments are handled using
+
+Safaricom Daraja API
+
+STK Push
+
+Only successful payments create confirmed bookings.
+
+Failed payments automatically release reserved seats after five minutes.
+
+15. Notifications
+
+Students receive
+
+Booking Confirmation
+
+Payment Confirmation
+
+Trip Reminder
+
+Cancellation Notice
+
+via SMS.
+
+16. Reporting
+
+The system generates
+
+Daily Revenue
+
+Weekly Revenue
+
+Monthly Revenue
+
+Bus Occupancy
+
+Trip Performance
+
+Passenger Reports
+
+Payment Reports
+
+Event Reports
+
+17. Offline Strategy
+
+One of the major design goals is operational continuity.
+
+The system must continue functioning even during temporary network failures.
+
+Offline features include
+
+Downloaded passenger lists
+
+Downloaded QR tickets
+
+Offline ticket verification
+
+Automatic synchronization after internet restoration
+
+Emergency printable passenger manifests
+
+18. Scalability
+
+The architecture supports
+
+Additional campuses
+
+Additional routes
+
+Additional administrators
+
+More buses
+
+Future Android Application
+
+Future iOS Application
+
+GPS Tracking
+
+University SSO Integration
+
+19. High-Level Architecture
+                 Student PWA
+                       │
+                       │
+             React + Tailwind CSS
+                       │
+────────────────────────────────────────────
+                       │
+                 Express.js API
+                       │
+        ┌──────────────┼──────────────┐
+        │              │              │
+     MySQL          Redis         Daraja API
+        │              │              │
+        │          Seat Holds     STK Push
+        │
+   QR Ticket Generator
+        │
+        ▼
+ Admin Dashboard     Driver Dashboard
+        │
+ Ticket Scanner
+ Reports
+ Bus Assignment
+ Trip Management
+20. Selected Technology Stack
+Frontend
+
+React.js
+
+TypeScript
+
+Tailwind CSS
+
+Vite
+
+React Router
+
+React Query
+
+Axios
+
+React Hook Form
+
+Zod
+
+Lucide Icons
+
+Chart.js
+
+html2pdf.js
+
+html5-qrcode
+
+PWA Support
+
+Backend
+
+Node.js
+
+Express.js
+
+Prisma ORM
+
+JWT
+
+bcrypt
+
+Joi
+
+Multer
+
+Node Cron
+
+Socket.IO (future real-time updates)
+
+Database
+
+MySQL 8
+
+MySQL Workbench
+
+Prisma ORM
+
+Cache
+
+Redis
+
+Seat Reservations
+
+OTP Cache
+
+Session Cache
+
+Payment
+
+Safaricom Daraja API
+
+STK Push
+
+Notifications
+
+Africa's Talking SMS
+
+Deployment
+
+Frontend
+
+Vercel
+
+Backend
+
+Render or Railway
+
+Database
+
+Railway MySQL
+
+Redis
+
+Upstash Redis
+
+21. Future Expansion
+
+Android Driver Application
+
+Offline Admin Application
+
+GPS Bus Tracking
+
+Student Notifications
+
+Push Notifications
+
+University Single Sign-On
+
+Advanced Analytics
+
+Machine Learning Occupancy Prediction

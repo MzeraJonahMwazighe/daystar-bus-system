@@ -1,0 +1,28 @@
+Final Technology Stack
+| Layer            | Technology                               | Why                                     |
+| ---------------- | ---------------------------------------- | --------------------------------------- |
+| Frontend         | React + Vite + TypeScript                | Fast, modern, scalable                  |
+| Styling          | Tailwind CSS + Shadcn UI                 | Clean, professional UI                  |
+| State            | Zustand                                  | Lightweight and simple                  |
+| Backend          | NestJS                                   | Structured enterprise backend           |
+| Language         | TypeScript                               | Safer, fewer runtime bugs               |
+| Database         | PostgreSQL                               | Best fit for relational booking data    |
+| ORM              | Prisma                                   | Clean database access and migrations    |
+| Cache            | Redis                                    | Seat locks, sessions, countdowns        |
+| Background Jobs  | BullMQ                                   | Auto-release seats, SMS, reports        |
+| Real-time        | Socket.IO                                | Live seat availability and updates      |
+| Payments         | Safaricom Daraja API                     | Official M-Pesa integration             |
+| SMS              | Africa's Talking                         | Reliable Kenyan SMS gateway             |
+| PDF              | Puppeteer                                | High-quality downloadable tickets       |
+| QR Codes         | qrcode                                   | Ticket generation                       |
+| QR Scanning      | Google ML Kit (Flutter)                  | Fast and reliable scanning              |
+| Mobile Apps      | Flutter                                  | Driver and admin apps from one codebase |
+| Authentication   | JWT + RBAC                               | Secure admin/driver access              |
+| API              | REST + Swagger                           | Standard and well documented            |
+| Testing          | Jest + Supertest + Cypress               | Unit, API, and end-to-end testing       |
+| Logging          | Winston                                  | Production-grade logs                   |
+| Error Tracking   | Sentry                                   | Crash and error monitoring              |
+| Storage          | Cloudinary (initially)                   | Ticket assets and images                |
+| Containerization | Docker                                   | Consistent deployment                   |
+| CI/CD            | GitHub Actions                           | Automated testing and deployment        |
+| Hosting          | Railway/Render (dev), Azure (production) | Scales with the project                 |

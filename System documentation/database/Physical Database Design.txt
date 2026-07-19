@@ -1,0 +1,859 @@
+---
+
+# 📘 Daystar University Bus Booking & Fleet Management System
+
+# Physical Database Design
+
+**Version 1.0**
+
+---
+
+# 1. Purpose
+
+The Physical Database Design converts the Logical Database Model into actual database tables that will be implemented in PostgreSQL.
+
+This document defines:
+
+* Table names
+* Column names
+* Data types
+* Primary Keys
+* Foreign Keys
+* Constraints
+* Default values
+* Relationships
+* Indexing strategy
+
+It acts as the blueprint for implementing the database without ambiguity.
+
+---
+
+# 2. Database Standard
+
+### Database Engine
+
+```
+PostgreSQL 17
+```
+
+---
+
+### Character Encoding
+
+```
+UTF-8
+```
+
+Supports
+
+* English
+* Student Names
+* Emojis (future)
+* SMS text
+
+---
+
+### Timezone
+
+```
+Africa/Nairobi
+UTC +3
+```
+
+Never use server timezone.
+
+---
+
+### Naming Convention
+
+### Tables
+
+```
+snake_case
+
+buses
+
+bus_trips
+
+payments
+
+seat_reservations
+```
+
+---
+
+### Columns
+
+```
+snake_case
+
+trip_id
+
+driver_id
+
+payment_status
+```
+
+---
+
+### Primary Keys
+
+```
+table_id
+
+bus_id
+
+trip_id
+
+ticket_id
+```
+
+---
+
+### Foreign Keys
+
+Always named after referenced table.
+
+```
+bus_id
+
+trip_id
+
+driver_id
+
+booking_id
+```
+
+---
+
+### Dates
+
+```
+TIMESTAMP WITH TIME ZONE
+```
+
+Never use DATE alone for bookings.
+
+---
+
+# 3. UUID Strategy
+
+Every major table uses UUID.
+
+Example
+
+Instead of
+
+```
+booking_id = 13
+```
+
+Use
+
+```
+bfba1b39-6cb8-4c4b-a1...
+
+```
+
+Why?
+
+* Impossible to guess
+* Better security
+* Better API design
+* Better distributed systems
+
+---
+
+# 4. Database Modules
+
+Our database is divided into modules.
+
+```
+MASTER DATA
+
+Campus
+
+Routes
+
+Stops
+
+Bus Types
+
+Buses
+
+Drivers
+
+Admins
+
+↓
+
+OPERATIONS
+
+Trips
+
+Seat Reservations
+
+Bookings
+
+Payments
+
+Tickets
+
+↓
+
+SYSTEM
+
+Audit Logs
+
+Notifications
+
+Reports
+
+Settings
+```
+
+---
+
+# 5. Table List
+
+This is the complete database.
+
+---
+
+## MASTER TABLES
+
+```
+campuses
+
+routes
+
+route_stops
+
+bus_types
+
+buses
+
+drivers
+
+admins
+
+supervisors
+```
+
+---
+
+## OPERATION TABLES
+
+```
+trips
+
+trip_events
+
+seat_layouts
+
+seat_reservations
+
+bookings
+
+booking_seats
+
+payments
+
+tickets
+
+ticket_scans
+```
+
+---
+
+## SYSTEM TABLES
+
+```
+notifications
+
+audit_logs
+
+system_settings
+
+reports
+
+download_logs
+```
+
+---
+
+Total
+
+```
+20 Tables
+```
+
+This is the correct size for a transport management system.
+
+---
+
+# 6. Master Data
+
+Master data changes rarely.
+
+Example
+
+Campus
+
+```
+Athi River
+
+Nairobi
+```
+
+Never changes.
+
+---
+
+Bus Types
+
+```
+Large
+
+67 Seats
+```
+
+```
+Small
+
+39 Seats
+```
+
+Never changes.
+
+---
+
+Routes
+
+```
+Athi → Nairobi
+```
+
+```
+Nairobi → Athi
+```
+
+Rarely changes.
+
+---
+
+# 7. Operational Data
+
+Changes every day.
+
+Example
+
+Trips
+
+```
+Today
+
+8 AM
+
+Bus KCU978S
+```
+
+Tomorrow
+
+New record.
+
+---
+
+Bookings
+
+Thousands.
+
+---
+
+Payments
+
+Thousands.
+
+---
+
+Seat Reservations
+
+Thousands.
+
+---
+
+# 8. Historical Data
+
+Never deleted.
+
+Example
+
+Payments
+
+Keep forever.
+
+Bookings
+
+Keep forever.
+
+Reports
+
+Keep forever.
+
+Audit Logs
+
+Keep forever.
+
+---
+
+# 9. Soft Delete Strategy
+
+Never
+
+```
+DELETE
+```
+
+Instead
+
+Every table gets
+
+```
+status
+
+ACTIVE
+
+INACTIVE
+
+ARCHIVED
+```
+
+This protects reports.
+
+---
+
+# 10. Standard Fields
+
+Nearly every table includes
+
+```
+created_at
+
+updated_at
+
+created_by
+
+updated_by
+
+status
+```
+
+This makes auditing much easier.
+
+---
+
+# 11. Seat Reservation Strategy
+
+This is the most important part.
+
+We are **NOT** storing Seat 1–67 repeatedly.
+
+Instead
+
+```
+Bus
+
+↓
+
+Seat Layout
+
+↓
+
+Trip
+
+↓
+
+Reservation
+```
+
+Meaning
+
+Seat 20 exists once.
+
+Only reservations change.
+
+This keeps the database small.
+
+---
+
+# 12. Booking Strategy
+
+Student
+
+↓
+
+Trip
+
+↓
+
+Seat Reservation
+
+↓
+
+Booking
+
+↓
+
+Payment
+
+↓
+
+Ticket
+
+---
+
+One booking
+
+↓
+
+Multiple seats
+
+Therefore
+
+Booking and Seats have
+
+```
+One-to-Many
+```
+
+relationship.
+
+---
+
+# 13. Payment Strategy
+
+Booking created
+
+↓
+
+Seat Reserved
+
+↓
+
+5 minute timer starts
+
+↓
+
+Student Pays
+
+↓
+
+Payment Verified
+
+↓
+
+Booking Confirmed
+
+↓
+
+Ticket Generated
+
+---
+
+If payment fails
+
+↓
+
+Reservation expires
+
+↓
+
+Seats become available
+
+---
+
+# 14. Event Bus Strategy
+
+Normal Day
+
+```
+Trip
+
+↓
+
+Bus
+
+↓
+
+Students Book
+```
+
+Event Day
+
+```
+Event
+
+↓
+
+Bus Assigned
+
+↓
+
+Booking Enabled?
+
+YES
+
+↓
+
+Students Can Book
+
+NO
+
+↓
+
+Private Transport
+```
+
+---
+
+# 15. Ticket Strategy
+
+Ticket generated only after
+
+```
+Payment Success
+```
+
+Ticket stores
+
+* QR Code
+* Download Count
+* Boarding Status
+* Scan Status
+
+Maximum Downloads
+
+```
+2
+```
+
+Exactly as we designed.
+
+---
+
+# 16. QR Strategy
+
+QR contains
+
+```
+ticket_id
+
+booking_id
+
+trip_id
+
+checksum
+
+expiry
+```
+
+NOT
+
+Student Name
+
+Phone
+
+Amount
+
+This improves security.
+
+---
+
+# 17. Audit Strategy
+
+Every important action is logged.
+
+Example
+
+```
+Admin Jane
+
+Assigned Bus
+
+↓
+
+Audit Log
+```
+
+```
+Student
+
+Cancelled Booking
+
+↓
+
+Audit Log
+```
+
+```
+Driver
+
+Marked Ready
+
+↓
+
+Audit Log
+```
+
+Everything.
+
+---
+
+# 18. Performance Strategy
+
+Indexes will exist on
+
+```
+booking_id
+
+ticket_id
+
+payment_id
+
+trip_id
+
+bus_id
+
+departure_date
+
+route_id
+
+status
+```
+
+No table scan should happen during booking.
+
+---
+
+# 19. Security Strategy
+
+Passwords
+
+```
+Argon2
+```
+
+Never plain text.
+
+---
+
+Payments
+
+Never editable.
+
+---
+
+Tickets
+
+Digitally signed.
+
+---
+
+Admins
+
+Role Based Access.
+
+---
+
+# 20. Backup Strategy
+
+Daily
+
+Automatic backup.
+
+Weekly
+
+Full backup.
+
+Monthly
+
+Archive.
+
+Future cloud storage.
+
+---
+
+# 21. Constraints
+
+Examples
+
+One seat
+
+↓
+
+Cannot belong to two reservations
+
+during same trip.
+
+---
+
+One payment
+
+↓
+
+One booking.
+
+---
+
+Ticket
+
+↓
+
+Only after successful payment.
+
+---
+
+Driver
+
+↓
+
+Cannot drive two buses
+
+at same time.
+
+---
+
+Bus
+
+↓
+
+Cannot be assigned
+
+to two trips
+
+at same time.
+
+---
+
+# 22. Scalability
+
+Supports
+
+* More campuses
+* More routes
+* More buses
+* Mobile App
+* Student Login (future)
+* GPS
+* ERP Integration
+* AI Predictions
+
+without redesign.
+
+---
+
+# 🚨 STOP HERE
+
+This completes the **Physical Database Design document**.
+
+---

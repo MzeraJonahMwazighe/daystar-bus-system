@@ -770,7 +770,7 @@ function viewSeats() {
 // Refresh seat status from API
 async function refreshSeatStatus() {
     try {
-        const response = await fetch(`http://localhost:3000/api/buses/${selectedBus.plate}`);
+        const response = await fetch(`${API_BASE}/api/buses/${selectedBus.plate}`);
         if (!response.ok) {
             console.error("Failed to refresh seat status");
             return;
@@ -956,7 +956,7 @@ function toggleSeat(seatNum, seatDiv) {
 }
 
 function updateSeatSummary() {
-    const count = selectedSeats.length;
+    const count = selectedSeats.length; 
     const total = count * farePerSeat;
     
     // Sort seats for display
@@ -981,11 +981,14 @@ async function proceedToPayment() {
 
     const busPlate = localStorage.getItem("selectedBusPlate");
     const total = selectedSeats.length * farePerSeat;
+    const passengerName = localStorage.getItem("passengerName") || "";
+    const phoneNumber = localStorage.getItem("phoneNumber") || "";
+    const selectedCampus = localStorage.getItem("selectedCampus") || "";
     console.log("Bus plate:", busPlate);
     console.log("Total fare:", total);
 
     try {
-        const response = await fetch("http://localhost:3000/api/bookings", {
+        const response = await fetch(`${API_BASE}/api/bookings`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
@@ -994,7 +997,10 @@ async function proceedToPayment() {
                 busPlate: busPlate,
                 seats: selectedSeats,
                 destination: destination,
-                totalAmount: total
+                totalAmount: total,
+                campus: selectedCampus,
+                passengerName: passengerName,
+                phoneNumber: phoneNumber
             })
         });
 
@@ -1011,6 +1017,8 @@ async function proceedToPayment() {
             localStorage.setItem("bookingId", bookingId);
             localStorage.setItem("selectedSeats", JSON.stringify(selectedSeats));
             localStorage.setItem("totalAmount", total);
+            localStorage.setItem("passengerName", passengerName);
+            localStorage.setItem("phoneNumber", phoneNumber);
 
             console.log("Booking saved to localStorage:", {
                 bookingId: bookingId,
@@ -1031,6 +1039,8 @@ async function proceedToPayment() {
 }
 
 // ========== API FUNCTIONS ==========
+const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com');
+
 async function loadBusesFromAPI() {
     const loadingEl = document.getElementById("busListLoading");
     const errorEl = document.getElementById("busListError");
@@ -1042,7 +1052,7 @@ async function loadBusesFromAPI() {
         errorEl.style.display = "none";
         busListEl.innerHTML = "";
 
-        const response = await fetch("http://localhost:3000/api/buses");
+        const response = await fetch(`${API_BASE}/api/buses`);
 
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);

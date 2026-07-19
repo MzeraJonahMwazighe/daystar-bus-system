@@ -10,6 +10,8 @@
 
 <!-- Add QR Code Library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <style>
 
@@ -31,6 +33,15 @@ body {
 }
 
 .ticket-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    justify-content: center;
+}
+
+.ticket-card {
     background: #1f2a38;
     border-radius: 14px;
     padding: 40px;
@@ -114,6 +125,8 @@ body {
     display: flex;
     gap: 15px;
     margin-top: 30px;
+    width: 100%;
+    max-width: 500px;
 }
 
 .action-btn {
@@ -176,6 +189,8 @@ const selectedSeats = JSON.parse(localStorage.getItem("ticketSeats")) || [];
 const amount = localStorage.getItem("ticketAmount") || "0";
 const destination = localStorage.getItem("selectedDestination") || "Unknown";
 const selectedTime = localStorage.getItem("selectedTime") || "Not available";
+const passengerName = localStorage.getItem("ticketPassengerName") || localStorage.getItem("passengerName") || "Guest";
+const phoneNumber = localStorage.getItem("ticketPhoneNumber") || localStorage.getItem("phoneNumber") || "Not provided";
 
 // Validate that ticket data exists
 if (!ticketID || !busPlate || selectedSeats.length === 0) {
@@ -187,6 +202,7 @@ if (!ticketID || !busPlate || selectedSeats.length === 0) {
     const ticketContent = document.getElementById("ticketContent");
     
     ticketContent.innerHTML = `
+        <div class="ticket-card" id="ticket">
         <div class="ticket-header">
             <h1>Daystar Bus Service</h1>
             <p>Your Bus Ticket</p>
@@ -200,6 +216,14 @@ if (!ticketID || !busPlate || selectedSeats.length === 0) {
             <div class="info-row">
                 <strong>Bus Plate:</strong>
                 <span>${busPlate}</span>
+            </div>
+            <div class="info-row">
+                <strong>Passenger:</strong>
+                <span>${passengerName}</span>
+            </div>
+            <div class="info-row">
+                <strong>Phone:</strong>
+                <span>${phoneNumber}</span>
             </div>
             <div class="info-row">
                 <strong>Destination:</strong>
@@ -226,6 +250,7 @@ if (!ticketID || !busPlate || selectedSeats.length === 0) {
 
         <div class="ticket-id">
             ${ticketID}
+        </div>
         </div>
 
         <div class="action-buttons">
@@ -257,9 +282,39 @@ if (!ticketID || !busPlate || selectedSeats.length === 0) {
     });
 }
 
-// Download ticket function
-function downloadTicket() {
-    alert("Ticket downloaded! (Feature available in production environment)");
+// Download ticket as PDF
+async function downloadTicket() {
+    const ticket = document.getElementById("ticket");
+
+    if (!ticket) {
+        alert("Ticket content is not available.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+
+    const canvas = await html2canvas(ticket, {
+        scale: 2,
+        useCORS: true
+    });
+
+    const imgData = canvas.toDataURL("image/png");
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const margin = 10;
+    const imgWidth = pdfWidth - margin * 2;
+    const imgHeight = canvas.height * imgWidth / canvas.width;
+
+    if (imgHeight <= pdfHeight - margin * 2) {
+        const y = Math.max(margin, (pdfHeight - imgHeight) / 2);
+        pdf.addImage(imgData, "PNG", margin, y, imgWidth, imgHeight);
+    } else {
+        pdf.addImage(imgData, "PNG", margin, margin, imgWidth, imgHeight);
+    }
+
+    const fileName = (ticketID || "BusTicket") + ".pdf";
+    pdf.save(fileName);
 }
 
 // Go home function
@@ -269,8 +324,6 @@ function goHome() {
 }
 
 </script>
-
-<script src="ticket.js"></script>
 
 </body>
 

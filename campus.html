@@ -84,6 +84,9 @@ background:#0c8ddb;
 <option value="">Select Destination</option>
 </select>
 
+<input id="passengerName" class="select-box" placeholder="Enter your full name" />
+<input id="phoneNumber" class="select-box" placeholder="07XXXXXXXX" />
+
 <button class="card-btn" onclick="searchBuses()">
 Show Available Buses
 </button>
@@ -94,6 +97,8 @@ Show Available Buses
 
 const campusSelect = document.getElementById("campus");
 const destSelect = document.getElementById("destination");
+const passengerNameInput = document.getElementById("passengerName");
+const phoneInput = document.getElementById("phoneNumber");
 
 campusSelect.addEventListener("change", () => {
     destSelect.innerHTML = '<option value="">Select Destination</option>';
@@ -170,19 +175,27 @@ const campus=document.getElementById("campus").value
 const day=document.getElementById("day").value
 const time=document.getElementById("time").value
 const destination=document.getElementById("destination").value
+const passengerName = passengerNameInput.value.trim()
+const phoneNumber = phoneInput.value.trim()
 
 if(!campus||!day||!time||!destination){
-
 alert("Please select campus, day, time, and destination")
-
 return
-
 }
 
-// Calculate fare based on destination
-let farePerSeat = 200;  // default fare for Nairobi-Athi or Athi-Nairobi
+if(!passengerName || !phoneNumber){
+alert("Please enter your name and phone number")
+return
+}
+
+if(!/^07\d{8}$/.test(phoneNumber)){
+alert("Please enter a valid phone number")
+return
+}
+
+let farePerSeat = 200;
 if(destination === "syokimau") {
-    farePerSeat = 150;  // short-distance fare
+    farePerSeat = 150;
 }
 
 localStorage.setItem("selectedCampus",campus)
@@ -190,6 +203,8 @@ localStorage.setItem("selectedDay",day)
 localStorage.setItem("selectedTime",time)
 localStorage.setItem("selectedDestination",destination)
 localStorage.setItem("farePerSeat",farePerSeat)
+localStorage.setItem("passengerName", passengerName)
+localStorage.setItem("phoneNumber", phoneNumber)
 
 window.location.href="trips.html"
 

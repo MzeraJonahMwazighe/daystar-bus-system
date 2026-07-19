@@ -5,7 +5,7 @@ const bookingId = params.get("bookingId");
 if (!bookingId) {
     alert("No booking ID found in URL");
 } else {
-    fetch("http://localhost:3000/api/ticket/" + bookingId)
+    fetch((window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')) + "/api/ticket/" + bookingId)
     .then(res => res.json())
     .then(data => {
         if (data.error) {

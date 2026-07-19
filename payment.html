@@ -120,7 +120,7 @@ font-weight:bold;
 
 <h3>Booking Summary</h3>
 
-<p>Seats: <span id="seatList"></span></p>
+<p>Selected Seat(s): <span id="seatList"></span></p>
 
 <p>Total Fare: KSH <span id="totalFare"></span></p>
 
@@ -151,6 +151,8 @@ const selectedSeats = JSON.parse(localStorage.getItem("selectedSeats")) || [];
 const busPlate = localStorage.getItem("selectedBusPlate") || "N/A";
 const destination = localStorage.getItem("selectedDestination") || "N/A";
 const farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
+const passengerName = localStorage.getItem("passengerName") || "";
+const phoneNumber = localStorage.getItem("phoneNumber") || "";
 
 /* Validate that seats were selected */
 if (selectedSeats.length === 0) {
@@ -185,12 +187,12 @@ function payNow() {
 
     console.log("Booking ID:", bookingId);
 
-    fetch("http://localhost:3000/api/pay", {
+    fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/mpesa/stk-push`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ bookingId: bookingId, phone: phone })
+        body: JSON.stringify({ bookingId: bookingId, phone: phone, passengerName: passengerName, amount: total })
     })
     .then(res => res.json())
     .then(data => {
@@ -198,11 +200,13 @@ function payNow() {
 
         if (data.success) {
             // SAVE TICKET DATA TO LOCALSTORAGE
-            const ticketID = 'TICKET' + Date.now() + Math.floor(Math.random() * 1000);
+            const ticketID = data.ticketId || 'TICKET' + Date.now() + Math.floor(Math.random() * 1000);
             localStorage.setItem("ticketID", ticketID);
             localStorage.setItem("ticketBusPlate", busPlate);
             localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
             localStorage.setItem("ticketAmount", total);
+            localStorage.setItem("ticketPassengerName", passengerName);
+            localStorage.setItem("ticketPhoneNumber", phone);
 
             console.log("Ticket saved:", {
                 ticketID: ticketID,

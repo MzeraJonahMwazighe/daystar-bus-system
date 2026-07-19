@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
+const { calculateFare, generateTicketNumber, validatePhoneNumber } = require('../lib/bookingHelpers');
 
 // Connect to database
 const db = new sqlite3.Database(
@@ -40,9 +41,8 @@ router.get('/', (req, res) => {
 
 // Create new booking
 router.post('/', (req, res) => {
-        const { busPlate, seats, destination, totalAmount } = req.body;
+        const { busPlate, seats, destination, totalAmount, campus, passengerName, phoneNumber } = req.body;
         
-        // Validation
         if (!busPlate || !seats || !Array.isArray(seats) || seats.length === 0) {
             return res.status(400).json({ error: 'Invalid booking data - busPlate, seats (array), and destination required' });
         }
@@ -51,11 +51,19 @@ router.post('/', (req, res) => {
             return res.status(400).json({ error: 'Destination is required' });
         }
 
+        if (!passengerName || !phoneNumber) {
+            return res.status(400).json({ error: 'Passenger name and phone number are required' });
+        }
+
+        if (!validatePhoneNumber(phoneNumber)) {
+            return res.status(400).json({ error: 'Please enter a valid phone number' });
+        }
+
         if (!totalAmount || totalAmount <= 0) {
             return res.status(400).json({ error: 'Invalid total amount' });
         }
 
-        // Step 1: Get bus_id from buses table
+        // Step 1: Get bus_id from buses table using the provided plate
         const busQuery = 'SELECT id FROM buses WHERE plate = ?';
         db.get(busQuery, [busPlate], (err, bus) => {
             if (err) {
@@ -69,100 +77,123 @@ router.post('/', (req, res) => {
 
             const busId = bus.id;
 
-            // Step 2: Check for double bookings - verify seats are not already reserved
-            const checkSeatsQuery = `
-                SELECT seat_number FROM seat_reservations 
-                WHERE trip_id = 1
-                AND seat_number IN (${seats.map(() => '?').join(',')})
-                AND (
-                    status = 'booked'
-                    OR (status = 'reserved' AND expires_at > datetime('now'))
-                )
-                LIMIT 1
-            `;
-
-            db.get(checkSeatsQuery, seats, (err, existingReservation) => {
+            // Step 2: Fetch the ACTIVE trip for this bus (REFACTORED: dynamic trip fetching)
+            const tripQuery = 'SELECT id FROM trips WHERE bus_id = ? AND status = ?';
+            db.get(tripQuery, [busId, 'active'], (err, trip) => {
                 if (err) {
                     console.error(err);
-                    return res.status(500).json({ error: 'Database error checking seats' });
+                    return res.status(500).json({ error: 'Database error fetching trip' });
                 }
 
-                if (existingReservation) {
-                    return res.status(409).json({ error: `Seat ${existingReservation.seat_number} already booked` });
+                if (!trip) {
+                    return res.status(404).json({ error: 'No active trip found for this bus' });
                 }
 
-                // Step 3: Generate booking ID
-                const bookingId = 'BUS' + Date.now() + Math.floor(Math.random() * 1000);
-                const seatsString = seats.join(',');
+                const tripId = trip.id;
 
-                // Step 4: Insert into bookings table with 'reserved' status
-                const insertBookingQuery = `
-                    INSERT INTO bookings (booking_id, bus_id, seats, destination, total_amount, status)
-                    VALUES (?, ?, ?, ?, ?, 'reserved')
+                // Step 3: Check for double bookings - verify seats are not already reserved
+                // REFACTORED: Using dynamic tripId instead of hardcoded '1'
+                const checkSeatsQuery = `
+                    SELECT seat_number FROM seat_reservations 
+                    WHERE trip_id = ?
+                    AND seat_number IN (${seats.map(() => '?').join(',')})
+                    AND (
+                        status = 'booked'
+                        OR (status = 'reserved' AND expires_at > datetime('now'))
+                    )
+                    LIMIT 1
                 `;
 
-                db.run(insertBookingQuery, [bookingId, busId, seatsString, destination, totalAmount], function(err) {
+                db.get(checkSeatsQuery, [tripId, ...seats], (err, existingReservation) => {
                     if (err) {
                         console.error(err);
-                        return res.status(500).json({ error: 'Database error creating booking' });
+                        return res.status(500).json({ error: 'Database error checking seats' });
                     }
 
-                    // Step 5: Insert each seat into seat_reservations with 'reserved' status and 2-minute expiry
-                    const insertSeatQuery = `
-                        INSERT INTO seat_reservations (trip_id, seat_number, booking_id, reserved_by, status, expires_at)
-                        VALUES (?, ?, ?, ?, 'reserved', datetime('now', '+2 minutes'))
+                    if (existingReservation) {
+                        return res.status(409).json({ error: `Seat ${existingReservation.seat_number} already booked` });
+                    }
+
+                    // Step 4: Generate booking ID
+                    const bookingId = generateTicketNumber();
+                    const seatsString = seats.join(',');
+                    const farePerSeat = calculateFare(campus, destination);
+                    const adjustedAmount = Number(totalAmount) || seats.length * farePerSeat;
+
+                    const insertBookingQuery = `
+                        INSERT INTO bookings (booking_id, bus_id, seats, destination, total_amount, status)
+                        VALUES (?, ?, ?, ?, ?, 'reserved')
                     `;
 
-                    let completedSeats = 0;
-                    let responded = false;
+                    db.run(insertBookingQuery, [bookingId, busId, seatsString, destination, adjustedAmount], function(err) {
+                        if (err) {
+                            console.error(err);
+                            return res.status(500).json({ error: 'Database error creating booking' });
+                        }
 
-                    function sendOnce(status, message) {
-                        if (!responded) {
-                            responded = true;
-                            if (status === 'success') {
-                                res.json(message);
-                            } else {
-                                res.status(status).json({ error: message });
+                        // Step 6: Insert each seat into seat_reservations with 'reserved' status and 2-minute expiry
+                        // REFACTORED: Using dynamic tripId instead of hardcoded '1'
+                        const insertSeatQuery = `
+                            INSERT INTO seat_reservations (trip_id, seat_number, booking_id, reserved_by, status, expires_at)
+                            VALUES (?, ?, ?, ?, 'reserved', datetime('now', '+2 minutes'))
+                        `;
+
+                        let completedSeats = 0;
+                        let responded = false;
+
+                        function sendOnce(status, message) {
+                            if (!responded) {
+                                responded = true;
+                                if (status === 'success') {
+                                    res.json(message);
+                                } else {
+                                    res.status(status).json({ error: message });
+                                }
                             }
                         }
-                    }
 
-                    seats.forEach((seatNumber) => {
-                        if (responded) return;
-                        // Check if seat already exists for this trip
-                        const checkSeatQuery = 'SELECT * FROM seat_reservations WHERE trip_id = ? AND seat_number = ?';
-                        db.get(checkSeatQuery, [1, seatNumber], (err, row) => {
+                        seats.forEach((seatNumber) => {
                             if (responded) return;
-                            if (err) {
-                                console.error(err);
-                                sendOnce(500, 'Database error checking seat');
-                                return;
-                            }
-                            if (row) {
-                                sendOnce(409, `Seat ${seatNumber} already booked`);
-                                return;
-                            }
-                            // Insert seat if not already booked
-                            db.run(insertSeatQuery, [1, seatNumber, bookingId, 'student'], (err) => {
+                            // Check if seat already exists for this trip
+                            // REFACTORED: Using dynamic tripId instead of hardcoded '1'
+                            const checkSeatQuery = 'SELECT * FROM seat_reservations WHERE trip_id = ? AND seat_number = ?';
+                            db.get(checkSeatQuery, [tripId, seatNumber], (err, row) => {
                                 if (responded) return;
                                 if (err) {
                                     console.error(err);
-                                    sendOnce(500, 'Database error reserving seats');
+                                    sendOnce(500, 'Database error checking seat');
                                     return;
                                 }
-                                completedSeats++;
-                                // Once all seats are inserted, respond
-                                if (completedSeats === seats.length) {
-                                    sendOnce('success', {
-                                        success: true,
-                                        booking_id: bookingId,
-                                        bus_id: busId,
-                                        seats: seats,
-                                        destination: destination,
-                                        total_amount: totalAmount,
-                                        status: 'reserved'
-                                    });
+                                if (row) {
+                                    sendOnce(409, `Seat ${seatNumber} already booked`);
+                                    return;
                                 }
+                                // Insert seat if not already booked
+                                // REFACTORED: Using dynamic tripId instead of hardcoded '1'
+                                db.run(insertSeatQuery, [tripId, seatNumber, bookingId, 'student'], (err) => {
+                                    if (responded) return;
+                                    if (err) {
+                                        console.error(err);
+                                        sendOnce(500, 'Database error reserving seats');
+                                        return;
+                                    }
+                                    completedSeats++;
+                                    // Once all seats are inserted, respond
+                                    if (completedSeats === seats.length) {
+                                        sendOnce('success', {
+                                            success: true,
+                                            booking_id: bookingId,
+                                            bus_id: busId,
+                                            trip_id: tripId,
+                                            seats: seats,
+                                            destination: destination,
+                                            total_amount: adjustedAmount,
+                                            status: 'reserved',
+                                            passenger_name: passengerName,
+                                            phone_number: phoneNumber
+                                        });
+                                    }
+                                });
                             });
                         });
                     });

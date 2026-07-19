@@ -1,0 +1,755 @@
+Perfect. This is where the project starts becoming a real software engineering project instead of just an idea.
+
+The **Database Definition** answered **"What is the database?"**
+
+The **Logical Database Model** answers:
+
+> **"Exactly what data are we storing, and how is every piece of data related?"**
+
+---
+
+# 📘 Daystar University Bus Booking & Fleet Management System
+
+# Logical Database Model
+
+### Version 1.0
+
+---
+
+# 1. Purpose
+
+The Logical Database Model defines every business entity that exists inside the Daystar University Bus Booking & Fleet Management System and explains how those entities relate to one another.
+
+Unlike the physical database, this model is independent of PostgreSQL or any other DBMS.
+
+Its purpose is to model the business.
+
+Only after this document is complete will we convert it into SQL tables.
+
+---
+
+# 2. Database Philosophy
+
+Our database is centred around one important concept:
+
+> **Everything revolves around a Trip.**
+
+Not buses.
+
+Not bookings.
+
+Not payments.
+
+A bus cannot exist in the booking system unless it has been assigned to a trip.
+
+Think of it like an airline.
+
+Passengers don't book airplanes.
+
+They book flights.
+
+The same principle applies here.
+
+Students don't book buses.
+
+Students book **Trips**.
+
+That decision alone will make the system far easier to scale.
+
+---
+
+# 3. Major Entities
+
+The system is made up of the following entities.
+
+```
+Campus
+
+↓
+
+Route
+
+↓
+
+Trip
+
+↓
+
+Bus
+
+↓
+
+Seat
+
+↓
+
+Booking
+
+↓
+
+Payment
+
+↓
+
+Ticket
+```
+
+Supporting entities
+
+```
+Driver
+
+Administrator
+
+Supervisor
+
+Bus Assignment
+
+Special Event
+
+Reports
+
+Notifications
+
+Audit Logs
+```
+
+---
+
+# 4. Entity Overview
+
+---
+
+## Entity 1 — Campus
+
+Represents every Daystar campus.
+
+Examples
+
+* Athi River
+* Nairobi
+
+One campus can have many administrators.
+
+One campus can have many trips.
+
+One campus can have many buses.
+
+Relationship
+
+```
+Campus
+
+↓
+
+Many Trips
+
+↓
+
+Many Administrators
+
+↓
+
+Many Buses
+```
+
+---
+
+## Entity 2 — Route
+
+Represents a transport route.
+
+Examples
+
+```
+Athi River → Nairobi
+
+Nairobi → Athi River
+```
+
+Routes almost never change.
+
+Trips use routes.
+
+Relationship
+
+```
+One Route
+
+↓
+
+Many Trips
+```
+
+---
+
+## Entity 3 — Bus
+
+Stores every bus owned by Daystar.
+
+Example
+
+```
+KCU978S
+
+67 Seats
+
+Large Bus
+```
+
+A bus is not permanently attached to a route.
+
+Instead,
+
+Administrators assign buses to trips.
+
+This allows
+
+Morning Trip
+
+↓
+
+Bus A
+
+Afternoon Trip
+
+↓
+
+Same Bus
+
+Evening Event
+
+↓
+
+Same Bus
+
+without duplication.
+
+Relationship
+
+```
+One Bus
+
+↓
+
+Many Trips
+
+(over time)
+```
+
+---
+
+# Entity 4 — Driver
+
+Each driver can drive many trips.
+
+A trip only has one assigned driver.
+
+Relationship
+
+```
+Driver
+
+↓
+
+Many Trips
+```
+
+---
+
+# Entity 5 — Administrator
+
+Administrators manage transport operations.
+
+They can
+
+Assign buses
+
+Assign drivers
+
+Create trips
+
+Open bookings
+
+Close bookings
+
+Scan tickets
+
+Approve events
+
+Every administrator belongs to one campus.
+
+Relationship
+
+```
+Campus
+
+↓
+
+Administrators
+
+↓
+
+Trips
+
+↓
+
+Bus Assignments
+```
+
+---
+
+# Entity 6 — Trip ⭐
+
+This is the heart of the entire system.
+
+Everything connects here.
+
+A Trip contains
+
+Departure date
+
+Departure time
+
+Origin campus
+
+Destination campus
+
+Assigned bus
+
+Assigned driver
+
+Booking status
+
+Maximum seats
+
+Trip type
+
+Normal
+
+or
+
+Special Event
+
+Students never book buses.
+
+Students always book Trips.
+
+Relationship
+
+```
+Trip
+
+↓
+
+Bookings
+
+↓
+
+Payments
+
+↓
+
+Tickets
+
+↓
+
+Reports
+```
+
+---
+
+# Entity 7 — Seat
+
+Seats belong to buses.
+
+Examples
+
+```
+Seat 1
+
+Seat 2
+
+Seat 45
+
+Seat 67
+```
+
+Seats never disappear.
+
+What changes is
+
+their availability for each trip.
+
+Relationship
+
+```
+Bus
+
+↓
+
+Seats
+```
+
+---
+
+# Entity 8 — Seat Reservation
+
+Very important.
+
+Notice this is NOT the Seat table.
+
+This table stores
+
+Seat
+
+*
+
+Trip
+
+*
+
+Reservation Status
+
+Example
+
+```
+Seat 15
+
+Trip 43
+
+Reserved
+
+Expires
+
+2:30 PM
+```
+
+This allows
+
+67 seats
+
+×
+
+100 trips
+
+without creating duplicate seat records.
+
+Relationship
+
+```
+Trip
+
+↓
+
+Seat Reservation
+
+↓
+
+Seat
+```
+
+---
+
+# Entity 9 — Booking
+
+Represents a student's booking.
+
+Stores
+
+Selected seats
+
+Destination
+
+Booking status
+
+Cancellation
+
+Timestamp
+
+Relationship
+
+```
+Trip
+
+↓
+
+Bookings
+```
+
+---
+
+# Entity 10 — Payment
+
+Every booking has one payment.
+
+Stores
+
+M-Pesa receipt
+
+Amount
+
+Status
+
+Transaction Time
+
+Relationship
+
+```
+Booking
+
+↓
+
+Payment
+```
+
+---
+
+# Entity 11 — Ticket
+
+Generated only after payment succeeds.
+
+Stores
+
+QR Code
+
+Ticket Number
+
+Download Count
+
+Boarding Status
+
+Relationship
+
+```
+Booking
+
+↓
+
+Ticket
+```
+
+---
+
+# Entity 12 — Special Event
+
+One of the new features we added.
+
+Example
+
+```
+Graduation
+
+Mission Week
+
+Sports Day
+
+Field Trip
+
+Church Event
+```
+
+The administrator can assign buses.
+
+The administrator decides
+
+```
+Booking Allowed
+
+YES
+
+NO
+```
+
+If YES
+
+Students may reserve seats.
+
+If NO
+
+Bus is private.
+
+Relationship
+
+```
+Special Event
+
+↓
+
+Trip
+
+↓
+
+Bus
+```
+
+---
+
+# Entity 13 — Notifications
+
+Stores
+
+SMS
+
+Booking confirmation
+
+Cancellation
+
+Reminder
+
+Departure reminder
+
+Relationship
+
+```
+Booking
+
+↓
+
+Notification
+```
+
+---
+
+# Entity 14 — Reports
+
+Stores generated reports.
+
+Examples
+
+Weekly Revenue
+
+Monthly Revenue
+
+Bus Occupancy
+
+Cancelled Trips
+
+Relationship
+
+Generated from
+
+Bookings
+
+Payments
+
+Trips
+
+---
+
+# Entity 15 — Audit Logs
+
+One of the most important tables.
+
+Stores everything administrators do.
+
+Example
+
+```
+Admin assigned Bus 7
+
+Admin deleted Trip
+
+Admin cancelled Booking
+
+Admin scanned Ticket
+```
+
+Relationship
+
+```
+Administrator
+
+↓
+
+Audit Logs
+```
+
+---
+
+# 5. High-Level Relationship Diagram
+
+```
+Campus
+   │
+   │
+   ▼
+Administrator
+   │
+   ▼
+Trip
+ ├───────────────┐
+ │               │
+ ▼               ▼
+Bus           Driver
+ │
+ ▼
+Seats
+
+Trip
+ │
+ ├─────────────┐
+ │             │
+ ▼             ▼
+Bookings   Seat Reservations
+ │
+ ▼
+Payments
+ │
+ ▼
+Tickets
+ │
+ ▼
+Notifications
+
+Trip
+ │
+ ▼
+Reports
+
+Administrator
+ │
+ ▼
+Audit Logs
+```
+
+---
+
+# 6. Cardinality (Relationship Rules)
+
+| Entity        | Relationship | Entity            |
+| ------------- | ------------ | ----------------- |
+| Campus        | 1 → Many     | Administrators    |
+| Campus        | 1 → Many     | Trips             |
+| Route         | 1 → Many     | Trips             |
+| Bus           | 1 → Many     | Trips             |
+| Driver        | 1 → Many     | Trips             |
+| Bus           | 1 → Many     | Seats             |
+| Trip          | 1 → Many     | Bookings          |
+| Trip          | 1 → Many     | Seat Reservations |
+| Booking       | 1 → 1        | Payment           |
+| Booking       | 1 → 1        | Ticket            |
+| Booking       | 1 → Many     | Notifications     |
+| Administrator | 1 → Many     | Audit Logs        |
+| Special Event | 1 → Many     | Trips             |
+
+---
+
+# 7. Business Rules
+
+These rules govern the data model:
+
+* A trip cannot exist without a route.
+* A trip must have one assigned bus.
+* A trip must have one assigned driver.
+* A seat belongs to only one bus.
+* A booking belongs to only one trip.
+* A payment belongs to only one booking.
+* A ticket is generated only after successful payment.
+* Seat reservations expire automatically after 5 minutes if payment is not completed.
+* Students may cancel bookings only up to 1 hour before departure.
+* A ticket can be downloaded a maximum of two times.
+* Special event trips may optionally allow or disallow student bookings.
+* Every administrator action is recorded in the audit log.
+
+---

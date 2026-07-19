@@ -1,0 +1,533 @@
+Absolutely. This should read like a professional **Software Requirements Specification (SRS)** or **Software Architecture Document**, not class notes. It should explain **why the database exists**, **what it is responsible for**, and **how it supports the business** before we ever draw a table.
+
+---
+
+# Daystar University Bus Booking & Fleet Management System
+
+## Database Design Definition
+
+### Version 1.0
+
+---
+
+# 1. Purpose of the Database
+
+The database serves as the central repository for the Daystar University Bus Booking and Fleet Management System. It stores, manages, protects, and organizes all operational data required for transporting students between campuses and supporting university transport operations.
+
+Unlike a traditional booking database, this database is designed to support the complete transport lifecycle, beginning from trip planning by administrators to ticket validation during boarding and reporting after a trip has been completed.
+
+The database must ensure that every booking, payment, seat assignment, bus allocation, and administrative action can be accurately recorded, tracked, audited, and retrieved.
+
+The system is designed to support approximately **500–700 students daily**, with room for future expansion without requiring structural redesign.
+
+---
+
+# 2. Vision of the Database
+
+The vision of the database is to provide a centralized, scalable, secure, and reliable data management system that supports all transport operations at Daystar University.
+
+The database is designed to become the single source of truth for every transport activity performed by students, drivers, administrators, and supervisors.
+
+Rather than storing information only for bookings, the database is intended to manage the university's entire transport ecosystem.
+
+---
+
+# 3. Database Objectives
+
+The database shall:
+
+* Store buses and fleet information.
+* Store campus information.
+* Store transport routes.
+* Store scheduled trips.
+* Store event transport assignments.
+* Store bookings.
+* Store seat reservations.
+* Store M-Pesa payments.
+* Generate digital tickets.
+* Support QR ticket validation.
+* Store administrator information.
+* Store driver information.
+* Store transport reports.
+* Record system activity through audit logs.
+* Support SMS notifications.
+* Allow future expansion without redesign.
+
+---
+
+# 4. Scope of the Database
+
+The database covers every operational process involved in university transport.
+
+This includes:
+
+## Student Operations
+
+* View available trips
+* Select destination
+* Select seats
+* Reserve seats
+* Pay through M-Pesa
+* Download ticket
+* Cancel booking
+* Receive notifications
+
+---
+
+## Transport Administration
+
+* Create trips
+* Assign buses
+* Assign drivers
+* Manage routes
+* Open bookings
+* Close bookings
+* Manage special events
+* Scan tickets
+* Generate reports
+
+---
+
+## Driver Operations
+
+Drivers do not manage bookings.
+
+Their responsibilities include:
+
+* View assigned trips
+* View passenger list
+* Confirm readiness
+* View boarding status
+
+---
+
+## Supervisor Operations
+
+The supervisor oversees the entire transport operation.
+
+Responsibilities include:
+
+* View reports
+* Monitor buses
+* Monitor revenue
+* Monitor administrators
+* View audit logs
+* Manage system settings
+
+---
+
+# 5. Database Design Philosophy
+
+The database follows several important principles.
+
+---
+
+## 5.1 Normalization
+
+The database will follow relational database normalization principles to eliminate duplicate data.
+
+Information should exist only once wherever possible.
+
+This improves:
+
+* consistency
+* maintainability
+* reporting
+* storage efficiency
+
+---
+
+## 5.2 Scalability
+
+The database must allow future expansion without changing the existing structure.
+
+Future expansion may include:
+
+* additional campuses
+* additional buses
+* additional administrators
+* additional drivers
+* additional routes
+* mobile application integration
+* student authentication
+* GPS tracking
+
+---
+
+## 5.3 Security
+
+Sensitive information shall never be duplicated unnecessarily.
+
+Every important action must be traceable.
+
+Only authorized users may perform administrative functions.
+
+---
+
+## 5.4 Data Integrity
+
+The database must ensure:
+
+* bookings reference valid trips
+* payments reference valid bookings
+* tickets reference successful payments
+* buses cannot be double-booked
+* seats cannot be sold twice
+* deleted records are archived instead of permanently removed whenever appropriate
+
+---
+
+## 5.5 Reliability
+
+The database should support:
+
+* transaction rollback
+* backup
+* recovery
+* logging
+* error recovery
+
+No payment should be lost because of partial failures.
+
+---
+
+# 6. Core Business Modules
+
+The database is divided into major business modules.
+
+Each module represents one area of university transport operations.
+
+---
+
+## Module 1
+
+Campus Management
+
+Responsible for storing:
+
+* campuses
+* campus information
+* campus administrators
+
+---
+
+## Module 2
+
+Route Management
+
+Stores:
+
+* transport routes
+* pickup locations
+* drop-off locations
+* route distances
+
+---
+
+## Module 3
+
+Fleet Management
+
+Stores:
+
+* buses
+* capacities
+* number plates
+* maintenance status
+* availability
+
+---
+
+## Module 4
+
+Trip Management
+
+Stores:
+
+* departure times
+* dates
+* assigned buses
+* assigned drivers
+* destinations
+* booking status
+
+---
+
+## Module 5
+
+Event Management
+
+Supports buses assigned to:
+
+* graduation
+* sports
+* field trips
+* conferences
+* church events
+* university functions
+
+The module allows administrators to decide whether students may book seats or whether the bus is reserved exclusively for an official event.
+
+---
+
+## Module 6
+
+Seat Management
+
+Responsible for:
+
+* seat layouts
+* reserved seats
+* booked seats
+* seat availability
+* automatic release after five minutes
+
+---
+
+## Module 7
+
+Booking Management
+
+Responsible for:
+
+* reservations
+* confirmations
+* cancellations
+* booking history
+* booking status
+
+---
+
+## Module 8
+
+Payment Management
+
+Responsible for:
+
+* M-Pesa transactions
+* payment verification
+* payment status
+* transaction references
+* refunds (future)
+
+---
+
+## Module 9
+
+Ticket Management
+
+Responsible for:
+
+* ticket generation
+* QR code generation
+* download limits
+* ticket validation
+* boarding status
+
+---
+
+## Module 10
+
+Driver Management
+
+Responsible for:
+
+* assigned buses
+* assigned trips
+* readiness confirmation
+
+---
+
+## Module 11
+
+Administration
+
+Responsible for:
+
+* assigning buses
+* assigning drivers
+* creating trips
+* enabling bookings
+* monitoring occupancy
+* scanning tickets
+
+---
+
+## Module 12
+
+Reporting
+
+Responsible for:
+
+* weekly revenue
+* monthly revenue
+* occupancy reports
+* payment reports
+* booking reports
+
+---
+
+## Module 13
+
+Notification Management
+
+Responsible for:
+
+* booking confirmation SMS
+* payment confirmation
+* reminders
+* cancellation alerts
+
+---
+
+## Module 14
+
+Audit Logging
+
+Stores every significant activity performed inside the system.
+
+Examples include:
+
+* bus assigned
+* trip created
+* booking cancelled
+* payment completed
+* ticket scanned
+* administrator login
+
+---
+
+# 7. Functional Responsibilities
+
+The database must support the following operational workflow.
+
+```
+Administrator
+      │
+Creates Trip
+      │
+Assigns Bus
+      │
+Assigns Driver
+      │
+Opens Booking
+      │
+────────────────────────────────────────
+Student
+      │
+Select Campus
+      │
+Choose Destination
+      │
+Choose Trip
+      │
+Choose Seat
+      │
+Seat Reserved (5 Minutes)
+      │
+Pay with M-Pesa
+      │
+Payment Success
+      │
+Booking Confirmed
+      │
+Ticket Generated
+      │
+Download Ticket
+      │
+Board Bus
+      │
+QR Code Scanned
+      │
+Trip Completed
+```
+
+---
+
+# 8. Event Transport Workflow
+
+The database must also support buses assigned outside their normal schedules.
+
+Example:
+
+```
+Administrator
+
+↓
+
+Creates Event
+
+↓
+
+Assigns Bus
+
+↓
+
+Assigns Driver
+
+↓
+
+Booking Enabled?
+
+      │
+ ┌────┴────┐
+ │         │
+YES       NO
+ │         │
+ ▼         ▼
+Students  Private Event
+Can Book
+```
+
+This ensures university events do not interfere with the normal transport schedule.
+
+---
+
+# 9. Performance Requirements
+
+The database should support:
+
+* 700+ daily users
+* hundreds of simultaneous bookings
+* fast seat availability queries
+* real-time booking updates
+* transaction processing
+* concurrent seat reservations
+
+---
+
+# 10. Future Expansion
+
+The database is designed to support future additions without major redesign.
+
+Potential future enhancements include:
+
+* Student login integration with Academia.
+* Staff transport management.
+* GPS tracking.
+* AI demand prediction.
+* Multi-campus expansion.
+* Email notifications.
+* Android and iOS applications.
+* Financial integration with the university ERP.
+* Maintenance scheduling.
+* Driver attendance.
+* Fuel management.
+* Bus maintenance history.
+
+---
+
+# 11. Database Design Principles
+
+The database shall adhere to the following principles:
+
+* Every entity shall have a unique identifier (Primary Key).
+* Relationships shall be enforced through Foreign Keys.
+* Data redundancy shall be minimized through normalization.
+* Transactions shall guarantee consistency.
+* Auditability shall be maintained for all critical operations.
+* Soft deletion shall be preferred over permanent deletion where historical records are required.
+* Sensitive operations shall be role-based.
+* The design shall prioritize scalability, maintainability, and security.
+
+---
