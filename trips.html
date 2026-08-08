@@ -617,7 +617,8 @@ const busesData = {
 let buses = [];
 
 function loadBusesFromAPI() {
-    fetch("http://localhost:3000/api/buses")
+    const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com');
+    fetch(`${apiBase}/api/buses`)
         .then(response => response.json())
         .then(data => {
             console.log("API buses:", data);
