@@ -1,66 +1,104 @@
 const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const Booking = require('../models/Booking');
+const Bus = require('../models/Bus');
+const Route = require('../models/Route');
+const Trip = require('../models/Trip');
 
-const db = new sqlite3.Database(path.join(__dirname, '../database/bus.db'));
+function normalizeRouteValue(routeValue) {
+  return String(routeValue || '').trim().toLowerCase().replace(/\s+/g, '');
+}
 
-router.get('/bookings', (req, res) => {
-  const query = `
-    SELECT b.booking_id, b.bus_id, b.seats, b.destination, b.total_amount, b.status, b.created_at,
-           s.seat_number, s.status AS seat_status
-    FROM bookings b
-    LEFT JOIN seat_reservations s ON s.booking_id = b.booking_id
-    ORDER BY b.created_at DESC, s.seat_number
-  `;
+function buildSeatsFromTrip(trip, bookingId) {
+  if (!trip || !Array.isArray(trip.seats)) {
+    return [];
+  }
 
-  db.all(query, [], (err, rows) => {
-    if (err) {
-      return res.status(500).json({ error: 'Database error' });
-    }
+  return trip.seats
+    .filter((seat) => seat.booking_id === bookingId)
+    .map((seat) => ({
+      seat_number: seat.seat_number,
+      status: seat.status
+    }))
+    .sort((left, right) => left.seat_number - right.seat_number);
+}
 
-    const grouped = {};
-    rows.forEach((row) => {
-      if (!grouped[row.booking_id]) {
-        grouped[row.booking_id] = {
-          booking_id: row.booking_id,
-          bus_id: row.bus_id,
-          destination: row.destination,
-          total_amount: row.total_amount,
-          status: row.status,
-          created_at: row.created_at,
-          seats: []
-        };
-      }
+async function resolveRouteDocument(routeValue) {
+  const normalized = normalizeRouteValue(routeValue);
+  if (!normalized) {
+    return null;
+  }
 
-      if (row.seat_number !== null) {
-        grouped[row.booking_id].seats.push({ seat_number: row.seat_number, status: row.seat_status });
-      }
-    });
+  const parts = normalized.split('-');
+  if (parts.length !== 2) {
+    return null;
+  }
 
-    res.json(Object.values(grouped));
-  });
+  const [from_location, to_location] = parts;
+  return Route.findOne({ from_location, to_location }).lean();
+}
+
+router.get('/bookings', async (req, res) => {
+  try {
+    const bookings = await Booking.find({}).sort({ createdAt: -1 }).populate('bus').populate('trip').lean();
+
+    const response = bookings.map((booking) => ({
+      booking_id: booking.booking_id,
+      bus_id: booking.bus?.plate || null,
+      destination: booking.destination,
+      total_amount: booking.total_amount,
+      status: booking.status,
+      created_at: booking.createdAt || booking.created_at,
+      seats: buildSeatsFromTrip(booking.trip, booking.booking_id)
+    }));
+
+    res.json(response);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Database error' });
+  }
 });
 
-router.post('/trips', (req, res) => {
+router.post('/trips', async (req, res) => {
   const { bus_id, route, departure_time, trip_date, status } = req.body;
 
   if (!bus_id || !route || !departure_time || !trip_date) {
     return res.status(400).json({ error: 'Missing trip details' });
   }
 
-  const query = `
-    INSERT INTO trips (bus_id, route, departure_time, trip_date, status)
-    VALUES (?, ?, ?, ?, ?)
-  `;
-
-  db.run(query, [bus_id, route, departure_time, trip_date, status || 'active'], function(err) {
-    if (err) {
-      return res.status(500).json({ error: 'Failed to create trip' });
+  try {
+    const bus = await Bus.findOne({ plate: String(bus_id).trim() }).lean();
+    if (!bus) {
+      return res.status(404).json({ error: 'Bus not found' });
     }
 
-    res.json({ success: true, trip_id: this.lastID });
-  });
+    const routeDocument = await resolveRouteDocument(route);
+    if (!routeDocument) {
+      return res.status(404).json({ error: 'Route not found' });
+    }
+
+    const seats = Array.from({ length: bus.capacity }, (_, index) => ({
+      seat_number: index + 1,
+      status: 'available',
+      booking_id: null,
+      reserved_by: null,
+      expires_at: null
+    }));
+
+    const trip = await Trip.create({
+      bus: bus._id,
+      route: routeDocument._id,
+      departure_time,
+      trip_date,
+      status: status || 'active',
+      seats
+    });
+
+    res.json({ success: true, trip_id: trip._id });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create trip' });
+  }
 });
 
 module.exports = router;

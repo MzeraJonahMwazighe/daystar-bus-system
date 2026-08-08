@@ -1,132 +1,113 @@
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const Bus = require('../models/Bus');
+const Trip = require('../models/Trip');
 
-// Connect to database
-const db = new sqlite3.Database(
-    path.join(__dirname, '../database/bus.db'),
-    (err) => {
-        if (err) {
-            console.error("Database connection error:", err.message);
-        } else {
-            console.log("Connected to SQLite database");
-        }
+function buildBookedSeats(trip) {
+    if (!trip || !Array.isArray(trip.seats)) {
+        return [];
     }
-);
 
-// =======================
-// GET ALL BUSES
-// =======================
-// Get all buses with booked seats
-router.get('/', (req, res) => {
-    const query = `
-        SELECT
-            buses.id,
-            buses.plate,
-            buses.capacity,
-            buses.type,
-            buses.route,
-            seat_reservations.seat_number,
-            seat_reservations.status
-        FROM buses
-        LEFT JOIN trips ON trips.bus_id = buses.id
-        LEFT JOIN seat_reservations ON seat_reservations.trip_id = trips.id
-        WHERE (seat_reservations.status IS NULL)
-        OR (seat_reservations.status = 'booked')
-        OR (seat_reservations.status = 'reserved' AND (seat_reservations.expires_at IS NULL OR seat_reservations.expires_at > datetime('now')))
-        ORDER BY buses.plate, seat_reservations.seat_number
-    `;
+    const now = new Date();
 
-    db.all(query, [], (err, rows) => {
-        if (err) {
-            console.error(err);
-            return res.status(500).json({ error: "Database error" });
-        }
-
-        const busMap = {};
-
-        rows.forEach(row => {
-            if (!busMap[row.plate]) {
-                busMap[row.plate] = {
-                    id: row.id,
-                    plate: row.plate,
-                    capacity: row.capacity,
-                    type: row.type,
-                    route: row.route,
-                    bookedSeats: []
-                };
+    return trip.seats
+        .filter(seat => {
+            if (!seat || seat.seat_number == null) {
+                return false;
             }
 
-            if (row.seat_number !== null) {
-                busMap[row.plate].bookedSeats.push({
-                    seat_number: row.seat_number,
-                    status: row.status
-                });
+            if (seat.status === 'booked') {
+                return true;
+            }
+
+            if (seat.status === 'reserved') {
+                return !seat.expires_at || seat.expires_at > now;
+            }
+
+            return false;
+        })
+        .map(seat => ({
+            seat_number: seat.seat_number,
+            status: seat.status
+        }));
+}
+
+// GET ALL BUSES
+router.get('/', async (req, res) => {
+    try {
+        const buses = await Bus.find({}).lean();
+        const busIds = buses.map(bus => bus._id);
+
+        const trips = await Trip.find({ bus: { $in: busIds }, status: 'active' })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        const tripMap = {};
+        const activeTripCounts = {};
+
+        trips.forEach(trip => {
+            const busId = trip.bus.toString();
+            activeTripCounts[busId] = (activeTripCounts[busId] || 0) + 1;
+
+            if (!tripMap[busId]) {
+                tripMap[busId] = trip;
             }
         });
 
-        res.json(Object.values(busMap));
-    });
+        Object.keys(activeTripCounts).forEach(busId => {
+            if (activeTripCounts[busId] > 1) {
+                console.warn(`Warning: multiple active trips found for bus ${busId}. Using the most recently created one.`);
+            }
+        });
+
+        const result = buses.map(bus => ({
+            id: bus._id,
+            plate: bus.plate,
+            capacity: bus.capacity,
+            type: bus.type,
+            route: bus.route,
+            bookedSeats: buildBookedSeats(tripMap[bus._id.toString()])
+        }));
+
+        res.json(result);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
-// =======================
 // GET BUS BY PLATE
-// =======================
-router.get('/:plate', (req, res) => {
-
+router.get('/:plate', async (req, res) => {
     const plate = req.params.plate;
 
-    const query = `
-        SELECT
-            buses.plate,
-            buses.capacity,
-            buses.type,
-            buses.route,
-            seat_reservations.seat_number,
-            seat_reservations.status
-        FROM buses
-        LEFT JOIN trips
-        ON buses.id = trips.bus_id
-        LEFT JOIN seat_reservations
-        ON trips.id = seat_reservations.trip_id
-        WHERE buses.plate = ?
-        AND (
-            (seat_reservations.status IS NULL)
-            OR (seat_reservations.status = 'booked')
-            OR (seat_reservations.status = 'reserved' AND (seat_reservations.expires_at IS NULL OR seat_reservations.expires_at > datetime('now')))
-        )
-        ORDER BY seat_reservations.seat_number
-    `;
+    try {
+        const bus = await Bus.findOne({ plate }).lean();
 
-    db.all(query, [plate], (err, rows) => {
-
-        if (err) {
-            console.error("DB ERROR:", err.message);
-            return res.status(500).json({ error: "Database error" });
+        if (!bus) {
+            return res.status(404).json({ error: 'Bus not found' });
         }
 
-        if (rows.length === 0) {
-            return res.status(404).json({ error: "Bus not found" });
+        const trips = await Trip.find({ bus: bus._id, status: 'active' })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (trips.length > 1) {
+            console.warn(`Warning: multiple active trips found for bus ${bus._id}. Using the most recently created one.`);
         }
 
-        const firstRow = rows[0];
-        const bus = {
-            plate: firstRow.plate,
-            capacity: firstRow.capacity,
-            type: firstRow.type,
-            route: firstRow.route,
-            bookedSeats: rows
-                .filter(r => r.seat_number !== null)
-                .map(r => ({
-                    seat_number: r.seat_number,
-                    status: r.status
-                }))
-        };
+        const trip = trips[0];
 
-        res.json(bus);
-    });
-
+        res.json({
+            plate: bus.plate,
+            capacity: bus.capacity,
+            type: bus.type,
+            route: bus.route,
+            bookedSeats: buildBookedSeats(trip)
+        });
+    } catch (err) {
+        console.error('DB ERROR:', err.message);
+        res.status(500).json({ error: 'Database error' });
+    }
 });
 
 module.exports = router;

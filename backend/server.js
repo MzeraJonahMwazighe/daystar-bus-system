@@ -3,287 +3,141 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const path = require('path');
 const http = require('http');
-const sqlite3 = require('sqlite3').verbose();
-const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 const { calculateFare, generateTicketNumber, validatePhoneNumber } = require('./lib/bookingHelpers');
+const { connectToDatabase } = require('./db');
+const Booking = require('./models/Booking');
+const Trip = require('./models/Trip');
+const Ticket = require('./models/Ticket');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
+const allowedOrigins = (process.env.CORS_ORIGIN || process.env.SOCKET_CORS_ORIGIN || 'http://localhost:3000,http://127.0.0.1:3000')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean);
 const io = new Server(server, {
     cors: {
-        origin: '*'
+        origin: allowedOrigins,
+        methods: ['GET', 'POST']
     }
 });
+
 app.set('io', io);
 
-if (process.env.MONGODB_URI) {
-    mongoose.connect(process.env.MONGODB_URI)
-        .then(() => console.log('Connected to MongoDB'))
-        .catch((err) => console.error('MongoDB connection error:', err.message));
-} else {
-    console.log('MongoDB URI not configured; using SQLite for now');
-}
+connectToDatabase();
 
 io.on('connection', (socket) => {
     socket.on('join-admin', () => socket.join('admin'));
 });
 
-// Initialize database connection globally
-const dbPath = path.join(__dirname, 'database/bus.db');
-const db = new sqlite3.Database(dbPath, (err) => {
-    if (err) {
-        console.error("Database connection error:", err.message);
-    } else {
-        console.log("Connected to SQLite database");
-    }
-});
-
 // Middleware
-app.use(cors());
+app.use(cors({
+    origin: allowedOrigins,
+    credentials: true
+}));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Background job: Clean up expired reservations every minute
-setInterval(() => {
-    db.run(`
-        UPDATE seat_reservations
-        SET status = 'cancelled'
-        WHERE status = 'reserved'
-        AND expires_at < datetime('now')
-    `, (err) => {
-        if (err) {
-            console.error("Error cleaning up expired reservations:", err.message);
-        } else {
-            console.log("✓ Expired reservations cleaned up");
+// Background job: Clean up expired reservations every minute (MongoDB)
+setInterval(async () => {
+    const now = new Date();
+    let expiredSeatsReset = 0;
+    let bookingsMarkedExpired = 0;
+
+    try {
+        const trips = await Trip.find({
+            seats: {
+                $elemMatch: {
+                    status: 'reserved',
+                    expires_at: { $lt: now }
+                }
+            }
+        }).lean();
+
+        for (const trip of trips) {
+            const expiredSeats = trip.seats.filter((seat) =>
+                seat.status === 'reserved' &&
+                seat.expires_at &&
+                new Date(seat.expires_at) < now
+            );
+
+            for (const seat of expiredSeats) {
+                const seatResetResult = await Trip.updateOne(
+                    {
+                        _id: trip._id,
+                        seats: {
+                            $elemMatch: {
+                                seat_number: seat.seat_number,
+                                booking_id: seat.booking_id,
+                                status: 'reserved',
+                                expires_at: { $lt: now }
+                            }
+                        }
+                    },
+                    {
+                        $set: {
+                            'seats.$.status': 'available',
+                            'seats.$.booking_id': null,
+                            'seats.$.reserved_by': null,
+                            'seats.$.expires_at': null
+                        }
+                    }
+                );
+
+                if (seatResetResult.modifiedCount > 0) {
+                    expiredSeatsReset += 1;
+
+                    if (seat.booking_id) {
+                        const bookingResult = await Booking.updateOne(
+                            { booking_id: seat.booking_id, status: 'reserved' },
+                            { $set: { status: 'expired' } }
+                        );
+
+                        if (bookingResult.modifiedCount > 0) {
+                            bookingsMarkedExpired += 1;
+                        }
+                    }
+                }
+            }
         }
-    });
+
+        console.log(`✓ Expired reservations cleaned up (seats reset: ${expiredSeatsReset}, bookings expired: ${bookingsMarkedExpired})`);
+    } catch (error) {
+        console.error('Error cleaning up expired reservations:', error.message);
+    }
 }, 60000); // Run every minute (60000ms)
 
-// Booking route: POST /api/book
-app.post('/api/book', (req, res) => {
-    const { plate, seats } = req.body;
+// NOTE: Legacy POST /api/book and POST /api/pay routes were removed.
 
-    if (!plate || !Array.isArray(seats) || seats.length === 0) {
-        return res.status(400).json({ error: 'Missing plate or seats array' });
-    }
-
-    // Get bus and trip info
-    db.get('SELECT id FROM buses WHERE plate = ?', [plate], (err, busRow) => {
-        if (err || !busRow) {
-            db.close();
-            return res.status(404).json({ error: 'Bus not found' });
-        }
-
-        const bus_id = busRow.id;
-
-        db.get('SELECT id FROM trips WHERE bus_id = ?', [bus_id], (err2, tripRow) => {
-            if (err2 || !tripRow) {
-                db.close();
-                return res.status(404).json({ error: 'Trip not found for this bus' });
-            }
-
-            const trip_id = tripRow.id;
-
-            // 1. Check if seats are available (not booked and not reserved with unexpired time)
-            const checkSeatsQuery = `
-                SELECT COUNT(*) as count FROM seat_reservations
-                WHERE trip_id = ?
-                AND seat_number IN (${seats.map(() => '?').join(',')})
-                AND (
-                    status = 'booked'
-                    OR (status = 'reserved' AND expires_at > datetime('now'))
-                )
-            `;
-
-            db.get(checkSeatsQuery, [trip_id, ...seats], (err, checkResult) => {
-                if (err || !checkResult) {
-                    return res.status(500).json({ error: 'Error checking seat availability' });
-                }
-
-                if (checkResult.count > 0) {
-                    return res.status(400).json({ error: 'One or more seats already booked or reserved' });
-                }
-
-                // 2. Begin transaction
-                db.run("BEGIN TRANSACTION", (err) => {
-                    if (err) {
-                        db.close();
-                        return res.status(500).json({ error: 'Failed to begin transaction' });
-                    }
-
-                    // 3. Insert seats into seat_reservations with 'reserved' status and 2-minute expiry
-                    let insertCount = 0;
-                    let hasError = false;
-
-                    const insertStmt = db.prepare(
-                        "INSERT INTO seat_reservations (trip_id, seat_number, reserved_by, status, expires_at) VALUES (?, ?, ?, 'reserved', datetime('now', '+2 minutes'))"
-                    );
-
-                    seats.forEach((seat) => {
-                        insertStmt.run(trip_id, seat, 'student', (err) => {
-                            if (err) {
-                                hasError = true;
-                            } else {
-                                insertCount++;
-                            }
-
-                            // Check if all inserts are done
-                            if (insertCount + (hasError ? 1 : 0) === seats.length) {
-                                insertStmt.finalize();
-
-                                if (hasError) {
-                                    // 4. If any seat already exists, rollback
-                                    db.run("ROLLBACK", () => {
-                                        db.close();
-                                        return res.status(400).json({ error: 'One or more seats already booked' });
-                                    });
-                                } else {
-                                    // 5. If all seats inserted, generate bookingId
-                                    const bookingId = 'BUS' + Date.now() + Math.floor(Math.random() * 1000);
-
-                                    // 6. Update seat_reservations with bookingId
-                                    const updateStmt = db.prepare(
-                                        "UPDATE seat_reservations SET booking_id = ? WHERE trip_id = ? AND seat_number = ?"
-                                    );
-
-                                    let updateCount = 0;
-                                    seats.forEach((seat) => {
-                                        updateStmt.run(bookingId, trip_id, seat, (err) => {
-                                            if (err) {
-                                                console.error('Update error:', err);
-                                            }
-                                            updateCount++;
-
-                                            if (updateCount === seats.length) {
-                                                updateStmt.finalize();
-
-                                                // 7. Commit transaction
-                                                db.run("COMMIT", (err) => {
-                                                    if (err) {
-                                                        db.close();
-                                                        return res.status(500).json({ error: 'Failed to commit transaction' });
-                                                    }
-
-                                                    // 8. Insert into bookings table
-                                                    const seatsString = seats.join(',');
-                                                    const totalAmount = seats.length * 200; // Assuming fixed fare
-                                                    const destination = 'athi'; // Assuming fixed destination
-
-                                                    db.run(
-                                                        "INSERT INTO bookings (booking_id, bus_id, seats, destination, total_amount, status) VALUES (?, ?, ?, ?, ?, ?)",
-                                                        [bookingId, bus_id, seatsString, destination, totalAmount, 'reserved'],
-                                                        function(err) {
-                                                            db.close();
-
-                                                            if (err) {
-                                                                return res.status(500).json({ error: 'Failed to create booking record' });
-                                                            }
-
-                                                            // 9. Return success and bookingId
-                                                            return res.json({
-                                                                success: true,
-                                                                bookingId: bookingId,
-                                                                message: 'Booking created successfully'
-                                                            });
-                                                        }
-                                                    );
-                                                });
-                                            }
-                                        });
-                                    });
-                                }
-                            }
-                        });
-                    });
-                });
-            });
-        });
-    });
-});
-app.post('/api/pay', (req, res) => {
-    const { bookingId, phone, passengerName } = req.body;
-
-    if (!bookingId) {
-        return res.status(400).json({ error: "Booking ID is required" });
-    }
-
-    if (!validatePhoneNumber(phone)) {
-        return res.status(400).json({ error: "Please enter a valid M-Pesa number" });
-    }
-
-    const ticketId = generateTicketNumber();
-
-    db.run(
-        "UPDATE bookings SET status = 'booked' WHERE booking_id = ?",
-        [bookingId],
-        function(err) {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: "Failed to update payment" });
-            }
-
-            db.run(
-                "UPDATE seat_reservations SET status = 'booked' WHERE booking_id = ?",
-                [bookingId],
-                function(err) {
-                    if (err) {
-                        console.error(err);
-                        return res.status(500).json({ error: "Failed to update seat reservations" });
-                    }
-
-                    db.run(
-                        "INSERT INTO tickets (ticket_id, booking_id, bus_id, seats, destination, amount, qr_data, status) VALUES (?, ?, (SELECT bus_id FROM bookings WHERE booking_id = ?), (SELECT seats FROM bookings WHERE booking_id = ?), (SELECT destination FROM bookings WHERE booking_id = ?), (SELECT total_amount FROM bookings WHERE booking_id = ?), ?, 'active')",
-                        [ticketId, bookingId, bookingId, bookingId, bookingId, bookingId, JSON.stringify({ ticket: ticketId, passengerName, phone })],
-                        function(err) {
-                            if (err) {
-                                console.error(err);
-                            }
-
-                            app.get('io').to('admin').emit('payment:completed', { bookingId, ticketId, passengerName, phone });
-                    res.json({ success: true, ticketId, passengerName, phone });
-                        }
-                    );
-                }
-            );
-        }
-    );
-});
-
-app.get('/api/ticket/:bookingId', (req, res) => {
+app.get('/api/ticket/:bookingId', async (req, res) => {
     const bookingId = req.params.bookingId;
 
-    db.get(
-        "SELECT * FROM bookings WHERE booking_id = ?",
-        [bookingId],
-        (err, row) => {
-            if (err) {
-                console.error(err);
-                return res.status(500).json({ error: "Database error" });
-            }
-
-            if (!row) {
-                return res.status(404).json({ error: "Ticket not found" });
-            }
-
-            db.get(
-                "SELECT ticket_id, qr_data FROM tickets WHERE booking_id = ? ORDER BY id DESC LIMIT 1",
-                [bookingId],
-                (err2, ticketRow) => {
-                    if (err2) {
-                        console.error(err2);
-                    }
-
-                    res.json({
-                        ...row,
-                        ticket_id: ticketRow?.ticket_id || null,
-                        qr_data: ticketRow?.qr_data || null
-                    });
-                }
-            );
+    try {
+        const booking = await Booking.findOne({ booking_id: bookingId }).populate('bus').lean();
+        if (!booking) {
+            return res.status(404).json({ error: 'Ticket not found' });
         }
-    );
+
+        const latestTicket = await Ticket.findOne({ booking_id: bookingId })
+            .sort({ createdAt: -1 })
+            .lean();
+
+        res.json({
+            booking_id: booking.booking_id,
+            bus_id: booking.bus?.plate || null,
+            seats: booking.seats,
+            destination: booking.destination,
+            total_amount: booking.total_amount,
+            status: booking.status,
+            ticket_id: latestTicket?.ticket_id || null,
+            qr_data: latestTicket?.qr_data || null
+        });
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Database error' });
+    }
 });
 
 // Serve static files from frontend
@@ -298,6 +152,10 @@ app.use('/api/mpesa', require('./routes/mpesa'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
+    res.json({ status: 'OK', message: 'Daystar Bus Booking System is running' });
+});
+
+app.get('/health', (req, res) => {
     res.json({ status: 'OK', message: 'Daystar Bus Booking System is running' });
 });
 
@@ -318,3 +176,5 @@ server.listen(PORT, () => {
     console.log(`Daystar Bus Booking System running on port ${PORT}`);
     console.log(`Server: http://localhost:${PORT}`);
 });
+
+module.exports = app;
