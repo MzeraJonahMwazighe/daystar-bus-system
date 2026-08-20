@@ -43,4 +43,4 @@
 - Add MPESA_PASSKEY
 - Add MPESA_CALLBACK_URL
 - Add MPESA_ENV=Sandbox or Production
-- Note: For LOCAL development, MPESA_CALLBACK_URL must point to a public tunnel URL (e.g. ngrok) because Daraja cannot reach localhost directly — update this URL each time the tunnel restarts unless using a paid/static ngrok domain. For PRODUCTION, set MPESA_CALLBACK_URL to your permanent deployed callback URL (e.g. https://daystar-bus-booking.onrender.com/api/mpesa/callback).
+- Note: For LOCAL development, MPESA_CALLBACK_URL must point to a public tunnel URL (e.g. ngrok) because Daraja cannot reach localhost directly — update this URL each time the tunnel restarts unless using a paid/static ngrok domain. For PRODUCTION, set MPESA_CALLBACK_URL to your permanent deployed callback URL (e.g. https://daystar-bus-system-dvd9.onrender.com/api/mpesa/callback).

@@ -445,7 +445,7 @@ async function renderBusList(campus, container) {
     const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
 
     try {
-        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/admin/bookings`);
+        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/admin/bookings`);
         const bookings = response.ok ? await response.json() : [];
         const bookingSummary = document.createElement('div');
         bookingSummary.className = 'bus-card';
@@ -550,7 +550,7 @@ async function saveSchedule() {
     };
 
     try {
-        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/admin/trips`, {
+        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/admin/trips`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

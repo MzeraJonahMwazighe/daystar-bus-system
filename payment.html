@@ -187,7 +187,7 @@ function payNow() {
 
     console.log("Booking ID:", bookingId);
 
-    fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com')}/api/mpesa/stk-push`, {
+    fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/mpesa/stk-push`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"

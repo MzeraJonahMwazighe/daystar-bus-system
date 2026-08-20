@@ -1,7 +1,7 @@
 // Get bookingId from URL
 const params = new URLSearchParams(window.location.search);
 const bookingId = params.get("bookingId");
-const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-booking.onrender.com');
+const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
 
 if (!bookingId) {
     alert("No booking ID found in URL");
