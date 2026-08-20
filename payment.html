@@ -172,12 +172,6 @@ document.getElementById("amount").innerText = "KSH " + total;
 function payNow() {
     const phone = document.getElementById("phoneNumber").value.trim();
 
-    // Validate phone number
-    if (!/^07\d{8}$/.test(phone)) {
-        alert("Please enter a valid M-Pesa number (07XXXXXXXX).");
-        return;
-    }
-
     const bookingId = localStorage.getItem("bookingId");
 
     if (!bookingId) {
@@ -192,30 +186,15 @@ function payNow() {
         headers: {
             "Content-Type": "application/json"
         },
-        body: JSON.stringify({ bookingId: bookingId, phone: phone, passengerName: passengerName, amount: total })
+        body: JSON.stringify({ bookingId: bookingId, phoneNumber: phone })
     })
     .then(res => res.json())
     .then(data => {
         console.log("Payment response:", data);
 
         if (data.success) {
-            // SAVE TICKET DATA TO LOCALSTORAGE
-            const ticketID = data.ticketId || 'TICKET' + Date.now() + Math.floor(Math.random() * 1000);
-            localStorage.setItem("ticketID", ticketID);
-            localStorage.setItem("ticketBusPlate", busPlate);
-            localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
-            localStorage.setItem("ticketAmount", total);
-            localStorage.setItem("ticketPassengerName", passengerName);
-            localStorage.setItem("ticketPhoneNumber", phone);
-
-            console.log("Ticket saved:", {
-                ticketID: ticketID,
-                busPlate: busPlate,
-                selectedSeats: selectedSeats,
-                total: total
-            });
-            // NOW REDIRECT
-            window.location.href = "ticket.html";
+            showPaymentStatus("Check your phone and approve the M-Pesa prompt...", true);
+            pollForConfirmedTicket(bookingId, phone);
         } else {
             alert(data.error || "Payment failed");
         }
@@ -224,6 +203,53 @@ function payNow() {
         console.error("Payment error:", err);
         alert("Payment error: " + err.message);
     });
+}
+
+function showPaymentStatus(message, isPending = false) {
+    let statusElement = document.getElementById("paymentStatus");
+
+    if (!statusElement) {
+        statusElement = document.createElement("p");
+        statusElement.id = "paymentStatus";
+        statusElement.style.marginTop = "20px";
+        statusElement.style.fontWeight = "bold";
+        document.querySelector(".card").appendChild(statusElement);
+    }
+
+    statusElement.textContent = isPending ? `[Waiting] ${message}` : message;
+}
+
+async function pollForConfirmedTicket(bookingId, phone) {
+    const apiBase = window.API_BASE || (window.location.hostname === 'localhost'
+        ? 'http://localhost:3000'
+        : 'https://daystar-bus-system-dvd9.onrender.com');
+    const pollInterval = 3000;
+    const timeout = 90000;
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeout) {
+        try {
+            const response = await fetch(`${apiBase}/api/ticket/${encodeURIComponent(bookingId)}`);
+            const ticket = await response.json();
+
+            if (ticket.ticket_id) {
+                localStorage.setItem("ticketID", ticket.ticket_id);
+                localStorage.setItem("ticketBusPlate", busPlate);
+                localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
+                localStorage.setItem("ticketAmount", total);
+                localStorage.setItem("ticketPassengerName", passengerName);
+                localStorage.setItem("ticketPhoneNumber", phone);
+                window.location.href = "ticket.html";
+                return;
+            }
+        } catch (error) {
+            console.error("Ticket confirmation polling error:", error);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    showPaymentStatus("Payment not confirmed yet. If you completed the M-Pesa prompt, your ticket will appear shortly - you can check My Bookings, or contact support if this persists.");
 }
 </script>
 
