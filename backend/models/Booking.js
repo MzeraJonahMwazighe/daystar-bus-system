@@ -9,6 +9,10 @@ const BookingSchema = new mongoose.Schema({
   total_amount: { type: Number, required: true },
   passenger_name: { type: String },
   phone_number: { type: String },
+  checkout_request_id: { type: String, index: true },
+  mpesa_receipt_number: { type: String },
+  mpesa_transaction_date: { type: String },
+  mpesa_phone_number: { type: String },
   status: { type: String, default: 'pending' }
 }, {
   timestamps: true
