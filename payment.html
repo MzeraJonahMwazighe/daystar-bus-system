@@ -153,6 +153,7 @@ const destination = localStorage.getItem("selectedDestination") || "N/A";
 const farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
 const passengerName = localStorage.getItem("passengerName") || "";
 const phoneNumber = localStorage.getItem("phoneNumber") || "";
+document.getElementById("phoneNumber").value = phoneNumber;
 
 /* Validate that seats were selected */
 if (selectedSeats.length === 0) {
@@ -238,6 +239,7 @@ async function pollForConfirmedTicket(bookingId, phone) {
                 localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
                 localStorage.setItem("ticketAmount", total);
                 localStorage.setItem("ticketPassengerName", passengerName);
+                localStorage.setItem("phoneNumber", phone);
                 localStorage.setItem("ticketPhoneNumber", phone);
                 window.location.href = "ticket.html";
                 return;

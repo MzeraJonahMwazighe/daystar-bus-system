@@ -188,7 +188,7 @@ alert("Please enter your name and phone number")
 return
 }
 
-if(!/^07\d{8}$/.test(phoneNumber)){
+if(!/^\+?\d[\d\s]*$/.test(phoneNumber)){
 alert("Please enter a valid phone number")
 return
 }
