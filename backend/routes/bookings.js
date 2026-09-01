@@ -55,8 +55,17 @@ function drainBookingQueue() {
   next.started = true;
   clearTimeout(next.timeoutId);
 
+  const queueWaitMs = Date.now() - next.queuedAt;
+  console.log(`[booking-timing] Queue wait: ${queueWaitMs}ms`);
+
   Promise.resolve()
-    .then(next.task)
+    .then(async () => {
+      const value = await next.task();
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        return { ...value, queueWaitMs };
+      }
+      return value;
+    })
     .then((value) => next.resolve(value))
     .catch((error) => next.reject(error))
     .finally(() => {
@@ -74,6 +83,7 @@ function enqueueBookingTask(task, timeoutMs = BOOKING_QUEUE_TIMEOUT_MS) {
       resolve,
       reject,
       started: false,
+      queuedAt: Date.now(),
       timeoutId: null
     };
 
