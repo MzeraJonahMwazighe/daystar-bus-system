@@ -42,12 +42,16 @@ function serializeBooking(booking) {
 }
 
 function drainBookingQueue() {
+  console.log(`[queue-debug] drainBookingQueue() called | running=${bookingQueueState.running} | pending=${bookingQueueState.pending.length}`);
+
   if (bookingQueueState.running >= BOOKING_QUEUE_CONCURRENCY) {
+    console.log(`[queue-debug] queue full; skipping start | running=${bookingQueueState.running} | pending=${bookingQueueState.pending.length}`);
     return;
   }
 
   const next = bookingQueueState.pending.shift();
   if (!next) {
+    console.log(`[queue-debug] no queued item; nothing to start | running=${bookingQueueState.running} | pending=${bookingQueueState.pending.length}`);
     return;
   }
 
@@ -56,13 +60,16 @@ function drainBookingQueue() {
   clearTimeout(next.timeoutId);
 
   const queueWaitMs = Date.now() - next.queuedAt;
-  console.log(`[booking-timing] Queue wait: ${queueWaitMs}ms`);
+  console.log(`[booking-timing] Queue wait: ${queueWaitMs}ms | running=${bookingQueueState.running} | pending=${bookingQueueState.pending.length}`);
 
   Promise.resolve()
     .then(async () => {
+      const start = Date.now();
       const value = await next.task();
+      const executionMs = Date.now() - start;
+      console.log(`[booking-timing] handleBookingRequest() execution time: ${executionMs}ms | queueWait=${queueWaitMs}ms`);
       if (value && typeof value === 'object' && !Array.isArray(value)) {
-        return { ...value, queueWaitMs };
+        return { ...value, queueWaitMs, executionMs };
       }
       return value;
     })
@@ -70,6 +77,7 @@ function drainBookingQueue() {
     .catch((error) => next.reject(error))
     .finally(() => {
       bookingQueueState.running -= 1;
+      console.log(`[queue-debug] task finished | running=${bookingQueueState.running} | pending=${bookingQueueState.pending.length} | calling drainBookingQueue() again`);
       drainBookingQueue();
     });
 }
