@@ -1,12 +1,32 @@
+const SAME_ZONE_FARE = 150;
+const CROSS_ZONE_FARE = 200;
+
 function calculateFare(fromCampus, toDestination) {
   const normalizedFrom = String(fromCampus || '').toLowerCase();
   const normalizedTo = String(toDestination || '').toLowerCase();
 
   if (normalizedTo === 'syokimau' || normalizedFrom === 'syokimau') {
-    return 150;
+    return SAME_ZONE_FARE;
   }
 
-  return 200;
+  return CROSS_ZONE_FARE;
+}
+
+function calculateZoneFare(boardingStopName, alightingStopName, route) {
+  const stops = Array.isArray(route?.stops) ? route.stops : [];
+  const boardingStop = stops.find(stop => stop.name === boardingStopName);
+  const alightingStop = stops.find(stop => stop.name === alightingStopName);
+
+  if (!boardingStop || !alightingStop) {
+    const missingStops = [
+      !boardingStop && `boarding stop '${boardingStopName}'`,
+      !alightingStop && `alighting stop '${alightingStopName}'`
+    ].filter(Boolean).join(' and ');
+
+    throw new Error(`Stop not found in route.stops: ${missingStops}`);
+  }
+
+  return boardingStop.zone === alightingStop.zone ? SAME_ZONE_FARE : CROSS_ZONE_FARE;
 }
 
 function generateTicketNumber() {
@@ -86,6 +106,7 @@ function buildTicketPayload({ ticketId, busPlate, seats, destination, time, amou
 
 module.exports = {
   calculateFare,
+  calculateZoneFare,
   generateTicketNumber,
   validatePhoneNumber,
   normalizePhoneNumber,

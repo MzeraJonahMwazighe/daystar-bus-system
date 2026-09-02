@@ -1,12 +1,33 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { calculateFare, generateTicketNumber, validatePhoneNumber, normalizePhoneNumber, isSafaricomNumber } = require('../backend/lib/bookingHelpers');
+const { calculateFare, calculateZoneFare, generateTicketNumber, validatePhoneNumber, normalizePhoneNumber, isSafaricomNumber } = require('../backend/lib/bookingHelpers');
 
 test('calculateFare returns correct fares for known routes', () => {
   assert.equal(calculateFare('athi', 'nairobi'), 200);
   assert.equal(calculateFare('nairobi', 'athi'), 200);
   assert.equal(calculateFare('athi', 'syokimau'), 150);
   assert.equal(calculateFare('syokimau', 'nairobi'), 150);
+});
+
+test('calculateZoneFare applies same-zone and cross-zone fares', () => {
+  const route = {
+    stops: [
+      { name: 'Valley Road Campus', zone: 'valley_road_side' },
+      { name: 'Mbagathi', zone: 'valley_road_side' },
+      { name: 'Katani (Syokimau)', zone: 'athi_river_side' }
+    ]
+  };
+
+  assert.equal(calculateZoneFare('Valley Road Campus', 'Mbagathi', route), 150);
+  assert.equal(calculateZoneFare('Mbagathi', 'Katani (Syokimau)', route), 200);
+  assert.equal(calculateZoneFare('Katani (Syokimau)', 'Mbagathi', route), 200);
+});
+
+test('calculateZoneFare rejects stops missing from the route', () => {
+  assert.throws(
+    () => calculateZoneFare('Unknown stop', 'Mbagathi', { stops: [{ name: 'Mbagathi', zone: 'valley_road_side' }] }),
+    /Stop not found in route\.stops: boarding stop 'Unknown stop'/
+  );
 });
 
 test('generateTicketNumber produces a ticket-like identifier', () => {
