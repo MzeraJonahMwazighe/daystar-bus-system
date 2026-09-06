@@ -26,6 +26,10 @@ function calculateZoneFare(boardingStopName, alightingStopName, route) {
     throw new Error(`Stop not found in route.stops: ${missingStops}`);
   }
 
+  if (alightingStop.order <= boardingStop.order) {
+    throw new Error(`Alighting stop '${alightingStopName}' must come after boarding stop '${boardingStopName}' on this route`);
+  }
+
   return boardingStop.zone === alightingStop.zone ? SAME_ZONE_FARE : CROSS_ZONE_FARE;
 }
 

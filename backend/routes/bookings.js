@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { calculateFare, generateTicketNumber, validatePhoneNumber } = require('../lib/bookingHelpers');
+const { calculateZoneFare, generateTicketNumber, validatePhoneNumber } = require('../lib/bookingHelpers');
 const Booking = require('../models/Booking');
 const Bus = require('../models/Bus');
 const Trip = require('../models/Trip');
@@ -28,14 +28,21 @@ router.get('/', async (req, res) => {
 });
 
 router.post('/', async (req, res) => {
-  const { busPlate, seats, destination, totalAmount, campus, passengerName, phoneNumber } = req.body;
+  const { busPlate, seats, boardingStop, alightingStop, passengerName, phoneNumber } = req.body;
 
   if (!busPlate || !seats || !Array.isArray(seats) || seats.length === 0) {
-    return res.status(400).json({ error: 'Invalid booking data - busPlate, seats (array), and destination required' });
+    return res.status(400).json({ error: 'Invalid booking data - busPlate, seats (array), boardingStop, and alightingStop required' });
   }
 
-  if (!destination) {
-    return res.status(400).json({ error: 'Destination is required' });
+  const normalizedBoardingStop = String(boardingStop || '').trim();
+  const normalizedAlightingStop = String(alightingStop || '').trim();
+
+  if (!normalizedBoardingStop || !normalizedAlightingStop) {
+    return res.status(400).json({ error: 'Boarding stop and alighting stop are required' });
+  }
+
+  if (normalizedBoardingStop === normalizedAlightingStop) {
+    return res.status(400).json({ error: 'Boarding stop and alighting stop must be different' });
   }
 
   if (!passengerName || !phoneNumber) {
@@ -44,10 +51,6 @@ router.post('/', async (req, res) => {
 
   if (!validatePhoneNumber(phoneNumber)) {
     return res.status(400).json({ error: 'Please enter a valid phone number' });
-  }
-
-  if (!totalAmount || Number(totalAmount) <= 0) {
-    return res.status(400).json({ error: 'Invalid total amount' });
   }
 
   const requestedSeatNumbers = seats.map(Number);
@@ -70,9 +73,18 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'One or more requested seats do not exist on this bus' });
     }
 
-    const trip = await Trip.findOne({ bus: bus._id, status: 'active' }).sort({ createdAt: -1 });
+    const trip = await Trip.findOne({ bus: bus._id, status: 'active' })
+      .populate('route')
+      .sort({ createdAt: -1 });
     if (!trip) {
       return res.status(404).json({ error: 'No active trip found for this bus' });
+    }
+
+    let farePerSeat;
+    try {
+      farePerSeat = calculateZoneFare(normalizedBoardingStop, normalizedAlightingStop, trip.route);
+    } catch (error) {
+      return res.status(400).json({ error: error.message });
     }
 
     const bookingIdOverride = req.headers['x-fixed-booking-id'];
@@ -138,8 +150,7 @@ router.post('/', async (req, res) => {
       return res.status(409).json({ error: 'Seats no longer available' });
     }
 
-    const farePerSeat = calculateFare(campus, destination);
-    const adjustedAmount = Number(totalAmount) || uniqueSeatNumbers.length * farePerSeat;
+    const adjustedAmount = uniqueSeatNumbers.length * farePerSeat;
     const seatsString = uniqueSeatNumbers.join(',');
 
     const booking = await Booking.create({
@@ -147,7 +158,9 @@ router.post('/', async (req, res) => {
       bus: bus._id,
       trip: trip._id,
       seats: seatsString,
-      destination,
+      boardingStop: normalizedBoardingStop,
+      alightingStop: normalizedAlightingStop,
+      destination: normalizedAlightingStop,
       total_amount: adjustedAmount,
       passenger_name: passengerName,
       phone_number: phoneNumber,

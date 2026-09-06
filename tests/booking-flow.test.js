@@ -12,21 +12,34 @@ test('calculateFare returns correct fares for known routes', () => {
 test('calculateZoneFare applies same-zone and cross-zone fares', () => {
   const route = {
     stops: [
-      { name: 'Valley Road Campus', zone: 'valley_road_side' },
-      { name: 'Mbagathi', zone: 'valley_road_side' },
-      { name: 'Katani (Syokimau)', zone: 'athi_river_side' }
+      { name: 'Valley Road Campus', order: 1, zone: 'valley_road_side' },
+      { name: 'Mbagathi', order: 2, zone: 'valley_road_side' },
+      { name: 'Katani (Syokimau)', order: 13, zone: 'athi_river_side' }
     ]
   };
 
   assert.equal(calculateZoneFare('Valley Road Campus', 'Mbagathi', route), 150);
   assert.equal(calculateZoneFare('Mbagathi', 'Katani (Syokimau)', route), 200);
-  assert.equal(calculateZoneFare('Katani (Syokimau)', 'Mbagathi', route), 200);
 });
 
 test('calculateZoneFare rejects stops missing from the route', () => {
   assert.throws(
     () => calculateZoneFare('Unknown stop', 'Mbagathi', { stops: [{ name: 'Mbagathi', zone: 'valley_road_side' }] }),
     /Stop not found in route\.stops: boarding stop 'Unknown stop'/
+  );
+});
+
+test('calculateZoneFare rejects stops in reverse route order', () => {
+  const route = {
+    stops: [
+      { name: 'Valley Road Campus', order: 1, zone: 'valley_road_side' },
+      { name: 'Main Campus', order: 21, zone: 'athi_river_side' }
+    ]
+  };
+
+  assert.throws(
+    () => calculateZoneFare('Main Campus', 'Valley Road Campus', route),
+    /Alighting stop 'Valley Road Campus' must come after boarding stop 'Main Campus'/
   );
 });
 

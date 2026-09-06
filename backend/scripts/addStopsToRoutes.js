@@ -27,9 +27,20 @@ const STOPS = [
   { name: 'Main Campus', order: 21, zone: 'athi_river_side' }
 ];
 
+const REVERSED_STOPS = STOPS.map((stop, index) => ({
+  ...stop,
+  order: STOPS.length - index
+}));
+
 const ROUTE_DIRECTIONS = [
-  { from_location: 'nairobi', to_location: 'athi' },
-  { from_location: 'athi', to_location: 'nairobi' }
+  {
+    filter: { from_location: 'nairobi', to_location: 'athi' },
+    stops: STOPS
+  },
+  {
+    filter: { from_location: 'athi', to_location: 'nairobi' },
+    stops: REVERSED_STOPS
+  }
 ];
 
 async function main() {
@@ -40,16 +51,16 @@ async function main() {
   }
 
   for (const direction of ROUTE_DIRECTIONS) {
-    const routes = await Route.find(direction).select('_id from_location to_location').lean();
+    const routes = await Route.find(direction.filter).select('_id from_location to_location').lean();
 
     if (routes.length === 0) {
-      console.warn(`No route found for ${direction.from_location} -> ${direction.to_location}`);
+      console.warn(`No route found for ${direction.filter.from_location} -> ${direction.filter.to_location}`);
       continue;
     }
 
     for (const route of routes) {
-      await Route.updateOne({ _id: route._id }, { $set: { stops: STOPS } });
-      console.log(`Updated ${route.from_location} -> ${route.to_location} with ${STOPS.length} stops.`);
+      await Route.updateOne({ _id: route._id }, { $set: { stops: direction.stops } });
+      console.log(`Updated ${route.from_location} -> ${route.to_location} with ${direction.stops.length} stops.`);
     }
   }
 }
