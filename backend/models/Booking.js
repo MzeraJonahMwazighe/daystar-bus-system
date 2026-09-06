@@ -20,4 +20,10 @@ const BookingSchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Partial unique index: only one active booking per phone number
+BookingSchema.index(
+  { phone_number: 1 },
+  { unique: true, partialFilterExpression: { status: { $in: ['reserved', 'booked'] } } }
+);
+
 module.exports = mongoose.model('Booking', BookingSchema);

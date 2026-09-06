@@ -23,6 +23,13 @@ async function connectToDatabase() {
     });
     isConnected = true;
     console.log('Connected to MongoDB');
+    
+    // Ensure all schema indexes exist on the database
+    // syncIndexes() is idempotent: only adds missing indexes, never drops existing ones
+    // The phone_number unique partial index is defined in Booking schema and will be created here
+    const Booking = require('./models/Booking');
+    await Booking.syncIndexes();
+    console.log('✓ Booking indexes synced to database');
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
     if (error.message.includes('querySrv') && currentServers.length === 1 && (currentServers[0] === '127.0.0.1' || currentServers[0] === '::1')) {
@@ -37,6 +44,15 @@ async function connectToDatabase() {
       } catch (retryError) {
         console.error('MongoDB retry error:', retryError.message);
       }
+    }
+    
+    // Ensure indexes even after retry
+    try {
+      const Booking = require('./models/Booking');
+      await Booking.syncIndexes();
+      console.log('✓ Booking indexes synced to database (after retry)');
+    } catch (indexError) {
+      console.error('Failed to sync indexes (after retry):', indexError.message);
     }
   }
 }

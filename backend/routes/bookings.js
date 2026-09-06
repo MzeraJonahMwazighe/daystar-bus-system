@@ -173,8 +173,14 @@ router.post('/', async (req, res) => {
   } catch (error) {
     console.error(error);
 
-    if (error.code === 11000 && error.keyPattern && error.keyPattern.booking_id) {
-      return res.status(409).json({ error: 'Booking ID conflict, please retry' });
+    // Handle duplicate key errors
+    if (error.code === 11000 && error.keyPattern) {
+      if (error.keyPattern.booking_id) {
+        return res.status(409).json({ error: 'Booking ID conflict, please retry' });
+      }
+      if (error.keyPattern.phone_number) {
+        return res.status(409).json({ error: 'This phone number already has an active booking. Please complete or wait for your existing reservation to expire before booking again.' });
+      }
     }
 
     res.status(500).json({ error: 'Database error' });
