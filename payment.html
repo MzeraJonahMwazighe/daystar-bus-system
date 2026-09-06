@@ -148,26 +148,45 @@ style="padding:10px; width:220px; border-radius:6px; border:none;"
 <script>
 /* Get data from localStorage */
 const selectedSeats = JSON.parse(localStorage.getItem("selectedSeats")) || [];
-const busPlate = localStorage.getItem("selectedBusPlate") || "N/A";
-const destination = localStorage.getItem("selectedDestination") || "N/A";
-const farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
-const passengerName = localStorage.getItem("passengerName") || "";
-const phoneNumber = localStorage.getItem("phoneNumber") || "";
-document.getElementById("phoneNumber").value = phoneNumber;
+let busPlate = localStorage.getItem("selectedBusPlate") || "N/A";
+let passengerName = localStorage.getItem("passengerName") || "";
+let phoneNumber = localStorage.getItem("phoneNumber") || "";
+let total = null;
+let bookingData = null;
+const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
 
-/* Validate that seats were selected */
-if (selectedSeats.length === 0) {
-    alert("No seats selected.");
-    window.location.href = "trips.html";
+async function loadBookingSummary() {
+    const bookingId = localStorage.getItem("bookingId");
+
+    if (!bookingId || selectedSeats.length === 0) {
+        alert("No booking information found.");
+        window.location.href = "trips.html";
+        return;
+    }
+
+    try {
+        const response = await fetch(`${apiBase}/api/bookings/${encodeURIComponent(bookingId)}`);
+        const data = await response.json();
+
+        if (!response.ok) throw new Error(data.error || "Unable to load booking");
+
+        bookingData = data;
+        busPlate = data.bus_id || busPlate;
+        passengerName = localStorage.getItem("passengerName") || "";
+        phoneNumber = localStorage.getItem("phoneNumber") || "";
+        total = Number(data.total_amount);
+        document.getElementById("phoneNumber").value = phoneNumber;
+        document.getElementById("seatList").innerText = data.seats || selectedSeats.join(", ");
+        document.getElementById("totalFare").innerText = total;
+        document.getElementById("amount").innerText = "KSH " + total;
+    } catch (error) {
+        console.error("Booking summary error:", error);
+        alert(error.message);
+        window.location.href = "trips.html";
+    }
 }
 
-/* Calculate total fare */
-const total = selectedSeats.length * farePerSeat;
-
-/* Display booking information */
-document.getElementById("seatList").innerText = selectedSeats.join(", ");
-document.getElementById("totalFare").innerText = total;
-document.getElementById("amount").innerText = "KSH " + total;
+loadBookingSummary();
 
 /* Payment handler */
 function payNow() {
@@ -182,7 +201,7 @@ function payNow() {
 
     console.log("Booking ID:", bookingId);
 
-    fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/mpesa/stk-push`, {
+    fetch(`${apiBase}/api/mpesa/stk-push`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
@@ -237,7 +256,7 @@ async function pollForConfirmedTicket(bookingId, phone) {
                 localStorage.setItem("ticketID", ticket.ticket_id);
                 localStorage.setItem("ticketBusPlate", busPlate);
                 localStorage.setItem("ticketSeats", JSON.stringify(selectedSeats));
-                localStorage.setItem("ticketAmount", total);
+                localStorage.setItem("ticketAmount", String(total));
                 localStorage.setItem("ticketPassengerName", passengerName);
                 localStorage.setItem("phoneNumber", phone);
                 localStorage.setItem("ticketPhoneNumber", phone);

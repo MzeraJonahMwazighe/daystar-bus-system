@@ -186,18 +186,48 @@ body {
 const ticketID = localStorage.getItem("ticketID");
 const busPlate = localStorage.getItem("ticketBusPlate");
 const selectedSeats = JSON.parse(localStorage.getItem("ticketSeats")) || [];
-const amount = localStorage.getItem("ticketAmount") || "0";
-const destination = localStorage.getItem("selectedDestination") || "Unknown";
-const selectedTime = localStorage.getItem("selectedTime") || "Not available";
+let amount = localStorage.getItem("ticketAmount") || "0";
+let destination = "Unknown";
+const selectedTime = "Not available";
 const passengerName = localStorage.getItem("ticketPassengerName") || localStorage.getItem("passengerName") || "Guest";
 const phoneNumber = localStorage.getItem("ticketPhoneNumber") || localStorage.getItem("phoneNumber") || "Not provided";
 
-// Validate that ticket data exists
-if (!ticketID || !busPlate || selectedSeats.length === 0) {
+async function loadTicketBooking() {
+    const bookingId = localStorage.getItem("bookingId");
+
+    if (!bookingId) {
+        showTicketError("Error: No booking information found. Please complete a booking first.");
+        return;
+    }
+
+    try {
+        const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
+        const response = await fetch(`${apiBase}/api/bookings/${encodeURIComponent(bookingId)}`);
+        const booking = await response.json();
+
+        if (!response.ok) throw new Error(booking.error || "Unable to load booking");
+
+        amount = String(booking.total_amount);
+        destination = booking.destination || booking.alightingStop || "Unknown";
+        renderTicket();
+    } catch (error) {
+        console.error("Ticket booking load error:", error);
+        showTicketError(error.message);
+    }
+}
+
+function showTicketError(message) {
     document.getElementById("ticketContent").style.display = "none";
     document.getElementById("errorMessage").style.display = "block";
-    document.getElementById("errorText").innerText = "Error: No booking information found. Please complete a booking first.";
-} else {
+    document.getElementById("errorText").innerText = message;
+}
+
+function renderTicket() {
+    if (!ticketID || !busPlate || selectedSeats.length === 0) {
+        showTicketError("Error: No booking information found. Please complete a booking first.");
+        return;
+    }
+
     // Display ticket information
     const ticketContent = document.getElementById("ticketContent");
     
@@ -281,6 +311,8 @@ if (!ticketID || !busPlate || selectedSeats.length === 0) {
         correctLevel: QRCode.CorrectLevel.H
     });
 }
+
+loadTicketBooking();
 
 // Download ticket as PDF
 async function downloadTicket() {

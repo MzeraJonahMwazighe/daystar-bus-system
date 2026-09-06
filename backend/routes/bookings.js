@@ -10,6 +10,8 @@ function serializeBooking(booking) {
     booking_id: booking.booking_id,
     bus_id: booking.bus?.plate || null,
     seats: booking.seats,
+    boardingStop: booking.boardingStop,
+    alightingStop: booking.alightingStop,
     destination: booking.destination,
     total_amount: booking.total_amount,
     status: booking.status,
