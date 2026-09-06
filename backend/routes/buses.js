@@ -3,6 +3,18 @@ const router = express.Router();
 const Bus = require('../models/Bus');
 const Trip = require('../models/Trip');
 
+function buildRouteDetails(trip) {
+    const route = trip?.route;
+    const stops = Array.isArray(route?.stops)
+        ? [...route.stops].sort((left, right) => left.order - right.order)
+        : [];
+
+    return {
+        routeId: route?._id || null,
+        stops
+    };
+}
+
 function buildBookedSeats(trip) {
     if (!trip || !Array.isArray(trip.seats)) {
         return [];
@@ -39,6 +51,7 @@ router.get('/', async (req, res) => {
         const busIds = buses.map(bus => bus._id);
 
         const trips = await Trip.find({ bus: { $in: busIds }, status: 'active' })
+            .populate('route')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -66,6 +79,7 @@ router.get('/', async (req, res) => {
             capacity: bus.capacity,
             type: bus.type,
             route: bus.route,
+            ...buildRouteDetails(tripMap[bus._id.toString()]),
             bookedSeats: buildBookedSeats(tripMap[bus._id.toString()])
         }));
 
@@ -88,6 +102,7 @@ router.get('/:plate', async (req, res) => {
         }
 
         const trips = await Trip.find({ bus: bus._id, status: 'active' })
+            .populate('route')
             .sort({ createdAt: -1 })
             .lean();
 
@@ -102,6 +117,7 @@ router.get('/:plate', async (req, res) => {
             capacity: bus.capacity,
             type: bus.type,
             route: bus.route,
+            ...buildRouteDetails(trip),
             bookedSeats: buildBookedSeats(trip)
         });
     } catch (err) {

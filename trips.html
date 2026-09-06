@@ -493,12 +493,12 @@ header p{
                 <span id="modalBusTime"></span>
             </p>
             <p>
-                <strong>Destination:</strong>
+                <strong>Route:</strong>
                 <span id="modalDestination"></span>
             </p>
             <p>
                 <strong>Fare per Seat:</strong>
-                KSH <span id="modalFare"></span>
+                Select stops after viewing seats
             </p>
         </div>
 
@@ -518,6 +518,21 @@ header p{
     <div class="seat-header">
         <h2 id="seatMapBusTitle"></h2>
         <p id="seatMapDestination"></p>
+        <div class="route-selection" style="display: flex; gap: 15px; flex-wrap: wrap; margin-top: 20px;">
+            <label style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 220px;">
+                Boarding Stop
+                <select id="boardingStop" onchange="handleBoardingStopChange()" style="padding: 10px; border-radius: 6px; border: 1px solid #607d8b; background: #0f2027; color: white;">
+                    <option value="">Select boarding stop</option>
+                </select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 220px;">
+                Alighting Stop
+                <select id="alightingStop" onchange="handleAlightingStopChange()" style="padding: 10px; border-radius: 6px; border: 1px solid #607d8b; background: #0f2027; color: white;">
+                    <option value="">Select alighting stop</option>
+                </select>
+            </label>
+        </div>
+        <p id="farePreviewStatus" style="color: #b0bec5; margin: 15px 0 0;">Select boarding and alighting stops to see the fare.</p>
     </div>
 
     <div class="seat-legend">
@@ -554,8 +569,8 @@ header p{
                 <strong id="summaryBusPlate">-</strong>
             </div>
             <div class="summary-item">
-                <span>Destination:</span>
-                <strong id="summaryDestination">-</strong>
+                <span>Route:</span>
+                <strong id="summaryRoute">-</strong>
             </div>
             <div class="summary-item">
                 <span>Seats:</span>
@@ -563,7 +578,7 @@ header p{
             </div>
             <div class="summary-item">
                 <span>Fare per Seat:</span>
-                <strong>KSH <span id="seatSummaryFare">200</span></strong>
+                <strong>KSH <span id="seatSummaryFare">-</span></strong>
             </div>
             <div class="summary-item total">
                 <span>Total:</span>
@@ -598,72 +613,7 @@ const busLayouts = {
     "KCU453E": { capacity: 29, type: "old" }
 };
 
-// ========== DATA ==========
-const busesData = {
-    athi: [
-        { plate: "KDA347R", type: "new", seats: 45, destination: "Syokimau/Nairobi" },
-        { plate: "KDC234K", type: "new", seats: 45, destination: "Syokimau/Nairobi" },
-        { plate: "KCU978S", type: "old", seats: 29, destination: "Syokimau/Nairobi" },
-        { plate: "KBX319D", type: "old", seats: 29, destination: "Syokimau/Nairobi" }
-    ],
-    nairobi: [
-        { plate: "KDE456K", type: "new", seats: 45, destination: "Syokimau/Athi" },
-        { plate: "KCY564K", type: "new", seats: 45, destination: "Syokimau/Athi" },
-        { plate: "KBX514D", type: "old", seats: 29, destination: "Syokimau/Athi" },
-        { plate: "KCU453E", type: "old", seats: 29, destination: "Syokimau/Athi" }
-    ]
-};
-
 let buses = [];
-
-function loadBusesFromAPI() {
-    const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
-    fetch(`${apiBase}/api/buses`)
-        .then(response => response.json())
-        .then(data => {
-            console.log("API buses:", data);
-
-            // Filter by campus
-            const selectedCampus = localStorage.getItem("selectedCampus");
-
-            if (selectedCampus && busesData[selectedCampus]) {
-                const campusBuses = busesData[selectedCampus].map(campusBus => {
-                    // Find matching bus from API
-                    const apiBus = data.find(b => b.plate === campusBus.plate);
-
-                    return {
-                        plate: campusBus.plate,
-                        type: campusBus.type,
-                        capacity: apiBus ? apiBus.capacity : campusBus.seats,
-                        bookedSeats: apiBus ? apiBus.bookedSeats : [],
-                        time: "Next departure",
-                        campus: selectedCampus
-                    };
-                });
-
-                buses = campusBuses;
-            } else {
-                buses = data; // fallback if no campus selected
-            }
-
-            renderBusList();
-        })
-        .catch(error => {
-            console.error("Error loading buses:", error);
-            alert("Failed to load buses. Please refresh the page.");
-        });
-}
-
-// ========== INITIALIZATION ==========
-document.addEventListener("DOMContentLoaded", () => {
-    if (!destination || !farePerSeat) {
-        alert("Please complete your travel details on the previous page.");
-        window.location.href = "campus.html";
-        return;
-    }
-
-    loadBusesFromAPI();
-});
 
 function convertTo12h(time24) {
     const [hours, minutes] = time24.split(":");
@@ -673,10 +623,10 @@ function convertTo12h(time24) {
     return `${h12}:${minutes}${ampm}`;
 }
 
-let destination = localStorage.getItem("selectedDestination") || "";
-let farePerSeat = Number(localStorage.getItem("farePerSeat")) || 200;
+let routeFarePerSeat = null;
 let selectedBus = null;
 let selectedSeats = [];
+let farePreviewRequestId = 0;
 
 // ========== RENDER BUS LIST ==========
 function renderBusList() {
@@ -745,8 +695,7 @@ function selectBus(bus) {
     document.getElementById("modalBusPlate").innerText = bus.plate;
     document.getElementById("modalBusStatus").innerText = `Available Seats: ${availableSeats}`;
     document.getElementById("modalBusTime").innerText = `Bus Type: ${bus.type}`;
-    document.getElementById("modalDestination").innerText = bus.route || destination.charAt(0).toUpperCase() + destination.slice(1);
-    document.getElementById("modalFare").innerText = farePerSeat;
+    document.getElementById("modalDestination").innerText = bus.route || "Route unavailable";
 
     document.getElementById("busModal").classList.add("active");
 }
@@ -765,6 +714,7 @@ function viewSeats() {
         document.getElementById("busModal").classList.remove("active");
         document.getElementById("seatMapContainer").classList.add("active");
         renderSeatMap();
+        populateStopSelectors();
     });
 }
 
@@ -780,6 +730,8 @@ async function refreshSeatStatus() {
         const busData = await response.json();
         // Update the selected bus with fresh seat data
         selectedBus.bookedSeats = busData.bookedSeats || [];
+        selectedBus.routeId = busData.routeId || selectedBus.routeId;
+        selectedBus.stops = busData.stops || selectedBus.stops || [];
     } catch (error) {
         console.error("Error refreshing seat status:", error);
     }
@@ -789,18 +741,101 @@ function backToBusList() {
     document.getElementById("seatMapContainer").classList.remove("active");
     document.getElementById("busList").style.display = "grid";
     selectedSeats = [];
+    routeFarePerSeat = null;
     selectedBus = null;
+}
+
+function getSortedStops() {
+    return [...(selectedBus?.stops || [])].sort((left, right) => left.order - right.order);
+}
+
+function addStopOptions(select, stops, placeholder) {
+    select.innerHTML = `<option value="">${placeholder}</option>`;
+
+    stops.forEach(stop => {
+        const option = document.createElement("option");
+        option.value = stop.name;
+        option.innerText = stop.name;
+        option.dataset.order = stop.order;
+        select.appendChild(option);
+    });
+}
+
+function populateStopSelectors() {
+    const boardingSelect = document.getElementById("boardingStop");
+    const alightingSelect = document.getElementById("alightingStop");
+    const stops = getSortedStops();
+
+    addStopOptions(boardingSelect, stops, "Select boarding stop");
+    addStopOptions(alightingSelect, [], "Select alighting stop");
+    routeFarePerSeat = null;
+    document.getElementById("farePreviewStatus").innerText = "Select boarding and alighting stops to see the fare.";
+    updateSeatSummary();
+}
+
+function handleBoardingStopChange() {
+    const boardingSelect = document.getElementById("boardingStop");
+    const alightingSelect = document.getElementById("alightingStop");
+    const boardingStop = getSortedStops().find(stop => stop.name === boardingSelect.value);
+    const validAlightingStops = boardingStop
+        ? getSortedStops().filter(stop => stop.order > boardingStop.order)
+        : [];
+
+    addStopOptions(alightingSelect, validAlightingStops, "Select alighting stop");
+    routeFarePerSeat = null;
+    document.getElementById("farePreviewStatus").innerText = boardingStop
+        ? "Select an alighting stop to see the fare."
+        : "Select boarding and alighting stops to see the fare.";
+    updateSeatSummary();
+}
+
+function handleAlightingStopChange() {
+    requestFarePreview();
+}
+
+async function requestFarePreview() {
+    const boardingStop = document.getElementById("boardingStop").value;
+    const alightingStop = document.getElementById("alightingStop").value;
+    const status = document.getElementById("farePreviewStatus");
+    const requestId = ++farePreviewRequestId;
+
+    routeFarePerSeat = null;
+    updateSeatSummary();
+
+    if (!boardingStop || !alightingStop) {
+        status.innerText = "Select boarding and alighting stops to see the fare.";
+        return;
+    }
+
+    status.innerText = "Loading fare...";
+
+    try {
+        const params = new URLSearchParams({ boardingStop, alightingStop });
+        const response = await fetch(`${API_BASE}/api/routes/${encodeURIComponent(selectedBus.routeId)}/fare?${params}`);
+        const data = await response.json();
+
+        if (requestId !== farePreviewRequestId) return;
+        if (!response.ok) throw new Error(data.error || "Unable to calculate fare");
+
+        routeFarePerSeat = Number(data.farePerSeat);
+        status.innerText = `Fare per seat: KSH ${routeFarePerSeat}. Total updates with your seat selection.`;
+        updateSeatSummary();
+    } catch (error) {
+        if (requestId !== farePreviewRequestId) return;
+        status.innerText = error.message;
+        updateSeatSummary();
+    }
 }
 
 // ========== SEAT MAP RENDERING ==========
 function renderSeatMap() {
     document.getElementById("seatMapBusTitle").innerText = `Bus: ${selectedBus.plate}`;
-    document.getElementById("seatMapDestination").innerText = `Destination: ${destination.charAt(0).toUpperCase() + destination.slice(1)} | Fare: KSH ${farePerSeat} per seat`;
+    document.getElementById("seatMapDestination").innerText = `Route: ${selectedBus.route || "Unavailable"}`;
     
     // Update booking summary panel
     document.getElementById("summaryBusPlate").innerText = selectedBus.plate;
-    document.getElementById("summaryDestination").innerText = destination.charAt(0).toUpperCase() + destination.slice(1);
-    document.getElementById("seatSummaryFare").innerText = farePerSeat;
+    document.getElementById("summaryRoute").innerText = selectedBus.route || "Unavailable";
+    document.getElementById("seatSummaryFare").innerText = routeFarePerSeat ?? "-";
 
     const seatGrid = document.getElementById("seatGrid");
     seatGrid.innerHTML = "";
@@ -957,36 +992,34 @@ function toggleSeat(seatNum, seatDiv) {
 }
 
 function updateSeatSummary() {
-    const count = selectedSeats.length; 
-    const total = count * farePerSeat;
+    const count = selectedSeats.length;
+    const total = routeFarePerSeat === null ? 0 : count * routeFarePerSeat;
     
     // Sort seats for display
     const sortedSeats = [...selectedSeats].sort((a, b) => a - b);
 
     // Update summary panel
     document.getElementById("summarySeats").innerText = sortedSeats.length > 0 ? sortedSeats.join(", ") : "None";
-    document.getElementById("totalFareAmount").innerText = total;
+    document.getElementById("seatSummaryFare").innerText = routeFarePerSeat === null ? "-" : routeFarePerSeat;
+    document.getElementById("totalFareAmount").innerText = routeFarePerSeat === null ? "-" : total;
 
     // Enable/disable proceed button
-    document.getElementById("proceedBtn").disabled = count === 0;
+    document.getElementById("proceedBtn").disabled = count === 0 || routeFarePerSeat === null;
 }
 
 // ========== PAYMENT FLOW ==========
 async function proceedToPayment() {
     console.log("Selected seats:", selectedSeats);
 
-    if (selectedSeats.length === 0) {
-        alert("Please select at least one seat.");
+    if (selectedSeats.length === 0 || routeFarePerSeat === null) {
+        alert("Please select seats and a valid stop pair first.");
         return;
     }
 
     const busPlate = localStorage.getItem("selectedBusPlate");
-    const total = selectedSeats.length * farePerSeat;
     const passengerName = localStorage.getItem("passengerName") || "";
     const phoneNumber = localStorage.getItem("phoneNumber") || "";
-    const selectedCampus = localStorage.getItem("selectedCampus") || "";
     console.log("Bus plate:", busPlate);
-    console.log("Total fare:", total);
 
     try {
         const response = await fetch(`${API_BASE}/api/bookings`, {
@@ -997,9 +1030,8 @@ async function proceedToPayment() {
             body: JSON.stringify({
                 busPlate: busPlate,
                 seats: selectedSeats,
-                destination: destination,
-                totalAmount: total,
-                campus: selectedCampus,
+                boardingStop: document.getElementById("boardingStop").value,
+                alightingStop: document.getElementById("alightingStop").value,
                 passengerName: passengerName,
                 phoneNumber: phoneNumber
             })
@@ -1017,14 +1049,14 @@ async function proceedToPayment() {
             // SAVE TO LOCALSTORAGE BEFORE REDIRECT
             localStorage.setItem("bookingId", bookingId);
             localStorage.setItem("selectedSeats", JSON.stringify(selectedSeats));
-            localStorage.setItem("totalAmount", total);
+            localStorage.setItem("totalAmount", String(selectedSeats.length * routeFarePerSeat));
             localStorage.setItem("passengerName", passengerName);
             localStorage.setItem("phoneNumber", phoneNumber);
 
             console.log("Booking saved to localStorage:", {
                 bookingId: bookingId,
                 selectedSeats: selectedSeats,
-                totalAmount: total
+                totalAmount: selectedSeats.length * routeFarePerSeat
             });
 
             // REDIRECT TO PAYMENT (NO QUERY PARAMS)
@@ -1082,12 +1114,6 @@ async function loadBusesFromAPI() {
 
 // ========== INITIALIZATION ==========
 document.addEventListener("DOMContentLoaded", () => {
-    if (!destination || !farePerSeat) {
-        alert("Please complete your travel details on the previous page.");
-        window.location.href = "campus.html";
-        return;
-    }
-
     loadBusesFromAPI();
 });
 

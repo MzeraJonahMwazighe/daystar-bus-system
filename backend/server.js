@@ -145,6 +145,7 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // Routes
 app.use('/api/buses', require('./routes/buses'));
+app.use('/api/routes', require('./routes/routes'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
