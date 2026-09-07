@@ -1,5 +1,6 @@
-const SAME_ZONE_FARE = 150;
-const CROSS_ZONE_FARE = 200;
+// TEMPORARY TEST VALUES - restore to 150/200 before real use
+const SAME_ZONE_FARE = 1;
+const CROSS_ZONE_FARE = 2;
 
 function calculateFare(fromCampus, toDestination) {
   const normalizedFrom = String(fromCampus || '').toLowerCase();
