@@ -4,6 +4,8 @@ const { calculateZoneFare, generateTicketNumber, validatePhoneNumber } = require
 const Booking = require('../models/Booking');
 const Bus = require('../models/Bus');
 const Trip = require('../models/Trip');
+const { optionalStudentAuth } = require('../middleware/requireStudentAuth');
+const { confirmBookingPayment } = require('../lib/paymentHelpers');
 
 function serializeBooking(booking) {
   return {
@@ -15,6 +17,7 @@ function serializeBooking(booking) {
     destination: booking.destination,
     total_amount: booking.total_amount,
     status: booking.status,
+    payment_method: booking.payment_method || 'mpesa',
     created_at: booking.createdAt || booking.created_at
   };
 }
@@ -29,7 +32,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', optionalStudentAuth, async (req, res) => {
   const { busPlate, seats, boardingStop, alightingStop, passengerName, phoneNumber } = req.body;
 
   if (!busPlate || !seats || !Array.isArray(seats) || seats.length === 0) {
@@ -88,6 +91,19 @@ router.post('/', async (req, res) => {
     } catch (error) {
       return res.status(400).json({ error: error.message });
     }
+
+    const tripDate = new Date(`${trip.trip_date}T00:00:00.000Z`);
+    const routeId = String(trip.route?._id || trip.route);
+    const student = req.student;
+    const passCoversTrip = Boolean(
+      student?.has_bus_pass &&
+      student.pass_valid_from &&
+      student.pass_valid_until &&
+      !Number.isNaN(tripDate.getTime()) &&
+      new Date(student.pass_valid_from) <= tripDate &&
+      new Date(student.pass_valid_until) >= tripDate &&
+      (student.pass_route === 'all' || String(student.pass_route) === routeId)
+    );
 
     const bookingIdOverride = req.headers['x-fixed-booking-id'];
     const bookingId = bookingIdOverride || generateTicketNumber();
@@ -166,10 +182,28 @@ router.post('/', async (req, res) => {
       total_amount: adjustedAmount,
       passenger_name: passengerName,
       phone_number: phoneNumber,
-      status: 'reserved'
+      status: 'reserved',
+      payment_method: passCoversTrip ? 'pass' : 'mpesa'
     });
 
-    res.json({ success: true, booking_id: booking.booking_id, bookingId: booking.booking_id });
+    if (passCoversTrip) {
+      const ticket = await confirmBookingPayment(booking.booking_id);
+      return res.json({
+        success: true,
+        booking_id: booking.booking_id,
+        bookingId: booking.booking_id,
+        payment_method: 'pass',
+        status: 'booked',
+        ticket_id: ticket.ticket_id
+      });
+    }
+
+    return res.json({
+      success: true,
+      booking_id: booking.booking_id,
+      bookingId: booking.booking_id,
+      payment_method: 'mpesa'
+    });
   } catch (error) {
     console.error(error);
 

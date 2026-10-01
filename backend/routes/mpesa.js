@@ -56,6 +56,11 @@ router.post('/stk-push', async (req, res) => {
       return res.status(400).json({ error: 'Booking ID is required' });
     }
 
+    const existingBooking = await Booking.findOne({ booking_id: bookingId }).select({ payment_method: 1 }).lean();
+    if (existingBooking?.payment_method === 'pass') {
+      return res.status(409).json({ error: 'This booking is covered by a bus pass and does not require M-Pesa payment' });
+    }
+
     const booking = await Booking.findOneAndUpdate(
       {
         booking_id: bookingId,

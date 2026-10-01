@@ -25,6 +25,7 @@ async function request(server, path, body) {
 async function main() {
   if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI is not configured');
   process.env.OTP_HMAC_SECRET = process.env.OTP_HMAC_SECRET || 'test-only-otp-hmac-secret';
+  process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-only-jwt-secret';
   process.env.OTP_DELIVERY_MODE = 'console';
   process.env.NODE_ENV = 'test';
 

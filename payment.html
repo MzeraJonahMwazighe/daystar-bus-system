@@ -179,6 +179,12 @@ async function loadBookingSummary() {
         document.getElementById("seatList").innerText = data.seats || selectedSeats.join(", ");
         document.getElementById("totalFare").innerText = total;
         document.getElementById("amount").innerText = "KSH " + total;
+        if (data.payment_method === "pass" && data.status === "booked") {
+            document.getElementById("phoneNumber").hidden = true;
+            document.querySelector("button[onclick='payNow()']").hidden = true;
+            showPaymentStatus("Bus pass applied. Your booking is confirmed.");
+            window.setTimeout(() => pollForConfirmedTicket(localStorage.getItem("bookingId"), phoneNumber), 500);
+        }
     } catch (error) {
         console.error("Booking summary error:", error);
         alert(error.message);

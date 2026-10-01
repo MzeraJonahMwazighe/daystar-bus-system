@@ -4,11 +4,26 @@ const nodemailer = require('nodemailer');
 const OtpCode = require('../models/OtpCode');
 const Student = require('../models/Student');
 const { acquireOtpRateLimit } = require('../lib/otpRateLimit');
+const { signStudentSession } = require('../lib/studentSession');
+const { requireStudentAuth } = require('../middleware/requireStudentAuth');
 
 const router = express.Router();
 const OTP_TTL_MS = 10 * 60 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 const GENERIC_OTP_RESPONSE = { message: 'If the email is eligible, an OTP has been sent.' };
+const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function serializeStudent(student) {
+  return {
+    email: student.email,
+    name: student.name,
+    admission_number: student.admission_number,
+    has_bus_pass: student.has_bus_pass,
+    pass_valid_from: student.pass_valid_from,
+    pass_valid_until: student.pass_valid_until,
+    pass_route: student.pass_route
+  };
+}
 
 function normalizeEmail(value) {
   return String(value || '').trim().toLowerCase();
@@ -154,22 +169,27 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired OTP' });
     }
 
+    const sessionToken = signStudentSession({ studentId: String(student._id), email: student.email });
+    res.cookie('student_session', sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: SESSION_MAX_AGE_MS,
+      path: '/'
+    });
+
     return res.json({
       verified: true,
-      student: {
-        email: student.email,
-        name: student.name,
-        admission_number: student.admission_number,
-        has_bus_pass: student.has_bus_pass,
-        pass_valid_from: student.pass_valid_from,
-        pass_valid_until: student.pass_valid_until,
-        pass_route: student.pass_route
-      }
+      student: serializeStudent(student)
     });
   } catch (error) {
     console.error('OTP verification failed:', error.message);
     return res.status(500).json({ error: 'Unable to verify OTP' });
   }
+});
+
+router.get('/session', requireStudentAuth, (req, res) => {
+  return res.json({ authenticated: true, student: serializeStudent(req.student) });
 });
 
 module.exports = router;

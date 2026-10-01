@@ -15,6 +15,7 @@ const BookingSchema = new mongoose.Schema({
   mpesa_receipt_number: { type: String },
   mpesa_transaction_date: { type: String },
   mpesa_phone_number: { type: String },
+  payment_method: { type: String, default: 'mpesa' },
   status: { type: String, default: 'pending' }
 }, {
   timestamps: true
