@@ -150,6 +150,7 @@ app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/mpesa', require('./routes/mpesa'));
+app.use('/api/auth', require('./routes/auth'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
