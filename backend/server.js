@@ -28,10 +28,6 @@ app.set('io', io);
 
 connectToDatabase();
 
-io.on('connection', (socket) => {
-    socket.on('join-admin', () => socket.join('admin'));
-});
-
 // Middleware
 app.use(cors({
     origin: allowedOrigins,
@@ -147,10 +143,10 @@ app.use(express.static(path.join(__dirname, '..')));
 app.use('/api/buses', require('./routes/buses'));
 app.use('/api/routes', require('./routes/routes'));
 app.use('/api/bookings', require('./routes/bookings'));
-app.use('/api/payments', require('./routes/payments'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/mpesa', require('./routes/mpesa'));
 app.use('/api/auth', require('./routes/auth'));
+app.use('/api/staff/auth', require('./routes/staffAuth'));
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

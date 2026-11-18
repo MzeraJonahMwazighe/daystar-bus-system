@@ -1,11 +1,6 @@
 const Student = require('../models/Student');
 const { verifyStudentSession } = require('../lib/studentSession');
-
-function readCookie(req, name) {
-  const cookieHeader = req.headers.cookie || '';
-  const cookie = cookieHeader.split(';').map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
-  return cookie ? decodeURIComponent(cookie.slice(name.length + 1)) : null;
-}
+const { readCookie } = require('../lib/cookies');
 
 async function loadStudent(req) {
   const token = readCookie(req, 'student_session');

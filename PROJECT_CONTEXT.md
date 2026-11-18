@@ -74,15 +74,36 @@ concurrent payment confirmation.
 - bookings.js: full CRUD, the atomic seat-lock lives here
 - mpesa.js: POST /api/mpesa/stk-push, POST /api/mpesa/callback - real Daraja sandbox
   integration, tested end-to-end
-- admin.js, payments.js, ticket.js
+- auth.js: student login - POST /api/auth/request-otp, POST /api/auth/verify-otp (sets the
+  `student_session` cookie, 7 days), GET /api/auth/session
+- staffAuth.js: staff login - POST /api/staff/auth/request-otp, verify-otp (sets the
+  `staff_session` cookie, 12 hours), GET session, POST logout
+- admin.js: every route requires a campus_admin or super_admin login (router-level
+  middleware). Campus admins can only create trips departing their own campus. Staff
+  management (GET/POST /api/admin/staff, PATCH /api/admin/staff/:id) is super_admin only.
+- GET /api/bookings (list of all bookings) requires a campus_admin/super_admin login.
+
+### Accounts and sessions
+- Student (backend/models/Student.js): @daystar.ac.ke email, passwordless one-time-code login.
+- Staff (backend/models/Staff.js): roles super_admin | campus_admin | driver, campus
+  'athi' | 'nairobi' (required for campus_admin), active flag. No self sign-up: the first
+  super admin is created with `node backend/scripts/create-staff.js`, then super admins add
+  campus admins and drivers from admin.html.
+- One-time codes (backend/lib/otp.js) are shared by both logins. Each code has an
+  `audience` ('student' | 'staff'), and staff codes are hashed with a different prefix, so a
+  student code can never sign someone in as staff.
+- Session tokens (backend/lib/sessionToken.js) carry an `aud` claim. studentSession.js and
+  staffSession.js each refuse the other's tokens. Staff role/active status is re-read from
+  the database on every request (middleware/requireStaffAuth.js), so deactivation is instant.
+- Frontend pages load js/api.js for the API base URL (relative paths; no hardcoded Render URL).
 
 ### Known constraints / accepted limitations
 - Free-tier hosting (Render + Atlas): under heavy concurrent load (~40 simultaneous
   requests), average response time degrades to ~6-8s. This was load-tested extensively. A
   custom request queue was tried and made things WORSE (12-30% success rate vs 100%) and
   was reverted - don't re-attempt a queue without discussing first.
-- No student accounts/login yet (Phase 3, in progress/planned) - bookings are currently
-  anonymous, identified only by phone number.
+- Guest (anonymous) M-Pesa booking stays supported alongside student accounts.
+- The x-fixed-booking-id request header (stress-test hook) is ignored when NODE_ENV=production.
 
 ## Ground rules for AI assistants working on this project
 
@@ -103,9 +124,19 @@ concurrent payment confirmation.
 
 ## Current phase / what's being worked on
 
-Phase 3: student accounts via @daystar.ac.ke email + OTP verification, to support bus pass
-holders (pre-paid, no per-trip M-Pesa payment needed) alongside the existing anonymous
-M-Pesa flow, which stays fully functional for non-pass-holders. Security-sensitive - OTP
-and session handling need real scrutiny, not shortcuts.
+Student OTP login, JWT sessions and pass-covered bookings are done. The expansion roadmap
+(agreed November 2026), one reviewed commit per phase:
+
+1. Foundations - staff accounts with roles, locked admin routes, shared js/api.js (this phase)
+2. Student sign-up + profile page (admission number read from the email, e.g.
+   jonahmzera251582@daystar.ac.ke -> 251582), booking history, pass status
+3. Real trip scheduling - two campus admins (Athi River, Nairobi) plan departures the day
+   before (bus, driver, time); students book a trip instead of "a bus"
+4. Bus pass purchase (1 month / semester) via M-Pesa, plus admin-granted passes
+5. Driver page with live GPS sharing; live bus map for students (OpenStreetMap, free)
+6. Nearest stop from the student's location (computed in the browser), "your bus is two
+   stops away" notifications, ETAs
+
+Security-sensitive - OTP and session handling need real scrutiny, not shortcuts.
 
 ---

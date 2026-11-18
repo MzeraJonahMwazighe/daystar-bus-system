@@ -180,6 +180,7 @@ body {
     <p id="errorText"></p>
 </div>
 
+<script src="js/api.js"></script>
 <script>
 
 // Get ticket data from localStorage
@@ -201,7 +202,7 @@ async function loadTicketBooking() {
     }
 
     try {
-        const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
+        const apiBase = window.DaystarApi.base;
         const response = await fetch(`${apiBase}/api/bookings/${encodeURIComponent(bookingId)}`);
         const booking = await response.json();
 

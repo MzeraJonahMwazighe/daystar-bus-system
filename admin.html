@@ -109,6 +109,61 @@ body {
     display: none;
 }
 
+.info-message {
+    color: #b0bec5;
+    text-align: center;
+    margin-top: 15px;
+    display: none;
+}
+
+.admin-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    margin-top: 12px;
+    color: #b0bec5;
+}
+
+.admin-toolbar select {
+    padding: 8px;
+    border-radius: 6px;
+    border: none;
+    background: #0f2027;
+    color: white;
+}
+
+.staff-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+.staff-table th,
+.staff-table td {
+    text-align: left;
+    padding: 8px;
+    border-bottom: 1px solid #2c3e50;
+}
+
+.staff-table th {
+    color: #22c1c3;
+}
+
+.staff-form {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin-top: 20px;
+    align-items: end;
+}
+
+.staff-form .form-group {
+    margin-bottom: 0;
+}
+
 /* ADMIN DASHBOARD STYLES */
 .admin-container {
     width: 95%;
@@ -260,24 +315,28 @@ body {
 <!-- LOGIN SECTION -->
 <div class="login-container" id="loginSection">
     <h1>Admin Login</h1>
-    <p>Access your bus management dashboard</p>
-    
-    <div class="form-group">
-        <label for="campus">Select Campus</label>
-        <select id="campus">
-            <option value="">-- Choose Campus --</option>
-            <option value="athi">Athi River Campus</option>
-            <option value="nairobi">Nairobi Campus</option>
-        </select>
+    <p>Sign in with your staff email. We'll send you a 6-digit code.</p>
+
+    <!-- Step 1: email -->
+    <div id="emailStep">
+        <div class="form-group">
+            <label for="staffEmail">Staff email</label>
+            <input type="email" id="staffEmail" placeholder="you@daystar.ac.ke" autocomplete="email">
+        </div>
+        <button class="login-btn" id="sendCodeBtn" onclick="requestStaffCode()">Send code</button>
     </div>
-    
-    <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" placeholder="Enter admin password">
+
+    <!-- Step 2: code -->
+    <div id="codeStep" class="hidden">
+        <div class="form-group">
+            <label for="staffCode">6-digit code</label>
+            <input type="text" id="staffCode" inputmode="numeric" maxlength="6" placeholder="123456" autocomplete="one-time-code">
+        </div>
+        <button class="login-btn" id="verifyCodeBtn" onclick="verifyStaffCode()">Sign in</button>
+        <button class="login-btn" style="background:#2c3e50;" onclick="showEmailStep()">Use a different email</button>
     </div>
-    
-    <button class="login-btn" onclick="adminLogin()">Login</button>
-    
+
+    <div class="info-message" id="infoMsg"></div>
     <div class="error-message" id="errorMsg"></div>
 </div>
 
@@ -286,6 +345,59 @@ body {
     <div class="admin-header">
         <h1>Bus Management Dashboard</h1>
         <p id="adminTitle"></p>
+        <div class="admin-toolbar">
+            <span id="signedInAs"></span>
+            <span id="campusSwitcher" class="hidden">
+                <label for="campusSelect">Campus:</label>
+                <select id="campusSelect" onchange="switchCampus(this.value)">
+                    <option value="athi">Athi River</option>
+                    <option value="nairobi">Nairobi</option>
+                </select>
+            </span>
+        </div>
+    </div>
+
+    <!-- STAFF ACCOUNTS (super admin only) -->
+    <div class="campus-section hidden" id="staffSection">
+        <h2>👥 Staff Accounts</h2>
+        <p style="color:#b0bec5; margin:0;">Campus admins and drivers sign in with a code sent to their email. Deactivating an account signs them out immediately.</p>
+        <table class="staff-table">
+            <thead>
+                <tr><th>Name</th><th>Email</th><th>Role</th><th>Campus</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody id="staffTableBody"></tbody>
+        </table>
+
+        <div class="staff-form">
+            <div class="form-group">
+                <label for="newStaffName">Name</label>
+                <input type="text" id="newStaffName">
+            </div>
+            <div class="form-group">
+                <label for="newStaffEmail">Email</label>
+                <input type="email" id="newStaffEmail">
+            </div>
+            <div class="form-group">
+                <label for="newStaffRole">Role</label>
+                <select id="newStaffRole">
+                    <option value="campus_admin">Campus admin</option>
+                    <option value="driver">Driver</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="newStaffCampus">Campus</label>
+                <select id="newStaffCampus">
+                    <option value="athi">Athi River</option>
+                    <option value="nairobi">Nairobi</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="newStaffPhone">Phone (optional)</label>
+                <input type="tel" id="newStaffPhone">
+            </div>
+            <button class="bus-btn btn-toggle" onclick="createStaff()">Add staff member</button>
+        </div>
+        <div class="error-message" id="staffErrorMsg"></div>
     </div>
     
     <!-- ATHI RIVER CAMPUS BUSES -->
@@ -348,6 +460,7 @@ body {
     </div>
 </div>
 
+<script src="js/api.js"></script>
 <script>
 
 // Bus data organized by campus
@@ -366,8 +479,6 @@ const busesData = {
     ]
 };
 
-const ADMIN_PASSWORD = "admin_8457";
-
 // Predefined bus schedule by day
 const BUS_SCHEDULE = {
     monday: ["08:00", "16:00", "17:00"],
@@ -379,8 +490,24 @@ const BUS_SCHEDULE = {
     sunday: []
 };
 
-let currentAdmin = null;
+let currentAdmin = null;   // campus being shown: "athi" or "nairobi"
+let currentStaff = null;   // signed-in staff member from the server
 let editingBusIdx = null;
+
+const ROLE_LABELS = { super_admin: "Super admin", campus_admin: "Campus admin", driver: "Driver" };
+const CAMPUS_LABELS = { athi: "Athi River", nairobi: "Nairobi" };
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[ch]);
+}
+
+function showMessage(id, text) {
+    const el = document.getElementById(id);
+    el.textContent = text;
+    el.style.display = text ? "block" : "none";
+}
 
 // Helper to convert 24h to 12h format
 function convertTo12h(time24) {
@@ -391,32 +518,96 @@ function convertTo12h(time24) {
     return `${h12}:${minutes}${ampm}`;
 }
 
-function adminLogin() {
-    const campus = document.getElementById("campus").value;
-    const password = document.getElementById("password").value;
-    const errorMsg = document.getElementById("errorMsg");
+// ---------- Sign in (email + one-time code) ----------
 
-    if (!campus) {
-        errorMsg.textContent = "Please select a campus.";
-        errorMsg.style.display = "block";
+function showEmailStep() {
+    document.getElementById("emailStep").classList.remove("hidden");
+    document.getElementById("codeStep").classList.add("hidden");
+    document.getElementById("staffCode").value = "";
+    showMessage("infoMsg", "");
+    showMessage("errorMsg", "");
+}
+
+async function requestStaffCode() {
+    const email = document.getElementById("staffEmail").value.trim();
+    showMessage("errorMsg", "");
+
+    if (!email) {
+        showMessage("errorMsg", "Please enter your staff email.");
         return;
     }
 
-    if (!password) {
-        errorMsg.textContent = "Please enter a password.";
-        errorMsg.style.display = "block";
+    const button = document.getElementById("sendCodeBtn");
+    button.disabled = true;
+    try {
+        const result = await DaystarApi.request("/api/staff/auth/request-otp", { method: "POST", body: { email } });
+        if (!result.ok) {
+            showMessage("errorMsg", result.data?.error || "Could not send a code. Please try again.");
+            return;
+        }
+        document.getElementById("emailStep").classList.add("hidden");
+        document.getElementById("codeStep").classList.remove("hidden");
+        showMessage("infoMsg", result.data.message);
+        document.getElementById("staffCode").focus();
+    } catch (error) {
+        showMessage("errorMsg", "Network error. Please try again.");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+async function verifyStaffCode() {
+    const email = document.getElementById("staffEmail").value.trim();
+    const code = document.getElementById("staffCode").value.trim();
+    showMessage("errorMsg", "");
+
+    if (!/^\d{6}$/.test(code)) {
+        showMessage("errorMsg", "Enter the 6-digit code from your email.");
         return;
     }
 
-    if (password !== ADMIN_PASSWORD) {
-        errorMsg.textContent = "Invalid password. Access denied.";
-        errorMsg.style.display = "block";
+    const button = document.getElementById("verifyCodeBtn");
+    button.disabled = true;
+    try {
+        const result = await DaystarApi.request("/api/staff/auth/verify-otp", { method: "POST", body: { email, code } });
+        if (!result.ok) {
+            showMessage("errorMsg", result.data?.error || "Sign in failed.");
+            return;
+        }
+        startSession(result.data.staff);
+    } catch (error) {
+        showMessage("errorMsg", "Network error. Please try again.");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function startSession(staff) {
+    currentStaff = staff;
+
+    if (staff.role === "driver") {
+        DaystarApi.request("/api/staff/auth/logout", { method: "POST" });
+        showEmailStep();
+        showMessage("errorMsg", "This page is for campus admins. The driver page is coming in a later update.");
         return;
     }
 
-    // Successful login
+    currentAdmin = staff.campus || "athi";
+    showDashboard();
+}
+
+// Called when an admin API call says the session has ended.
+function handleSessionEnded() {
+    currentStaff = null;
+    currentAdmin = null;
+    document.getElementById("dashboardSection").classList.add("hidden");
+    document.getElementById("loginSection").classList.remove("hidden");
+    showEmailStep();
+    showMessage("errorMsg", "Your session has ended. Please sign in again.");
+}
+
+function switchCampus(campus) {
     currentAdmin = campus;
-    localStorage.setItem("adminCampus", campus);
     showDashboard();
 }
 
@@ -424,8 +615,19 @@ function showDashboard() {
     document.getElementById("loginSection").classList.add("hidden");
     document.getElementById("dashboardSection").classList.remove("hidden");
 
-    const campusName = currentAdmin === "athi" ? "Athi River" : "Nairobi";
+    const campusName = CAMPUS_LABELS[currentAdmin] || "Nairobi";
     document.getElementById("adminTitle").textContent = `${campusName} Campus - Bus Management`;
+
+    const roleLabel = ROLE_LABELS[currentStaff.role] || currentStaff.role;
+    document.getElementById("signedInAs").textContent = `Signed in as ${currentStaff.name} (${roleLabel})`;
+
+    const isSuperAdmin = currentStaff.role === "super_admin";
+    document.getElementById("campusSwitcher").classList.toggle("hidden", !isSuperAdmin);
+    document.getElementById("campusSelect").value = currentAdmin;
+    document.getElementById("staffSection").classList.toggle("hidden", !isSuperAdmin);
+    if (isSuperAdmin) {
+        loadStaffList();
+    }
 
     // Show appropriate campus section
     if (currentAdmin === "athi") {
@@ -445,8 +647,12 @@ async function renderBusList(campus, container) {
     const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
 
     try {
-        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/admin/bookings`);
-        const bookings = response.ok ? await response.json() : [];
+        const result = await DaystarApi.request("/api/admin/bookings");
+        if (result.status === 401) {
+            handleSessionEnded();
+            return;
+        }
+        const bookings = result.ok ? result.data : [];
         const bookingSummary = document.createElement('div');
         bookingSummary.className = 'bus-card';
         bookingSummary.innerHTML = `
@@ -550,14 +756,14 @@ async function saveSchedule() {
     };
 
     try {
-        const response = await fetch(`${window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com')}/api/admin/trips`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to save trip');
+        const result = await DaystarApi.request("/api/admin/trips", { method: "POST", body: payload });
+        if (result.status === 401) {
+            closeScheduleModal();
+            handleSessionEnded();
+            return;
+        }
+        if (!result.ok) {
+            throw new Error(result.data?.error || 'Failed to save trip');
         }
     } catch (error) {
         console.error('Trip save failed', error);
@@ -592,22 +798,106 @@ function toggleBusStatus(campus, busIdx) {
     renderBusList(campus, container);
 }
 
-function adminLogout() {
-    currentAdmin = null;
-    localStorage.removeItem("adminCampus");
-    document.getElementById("loginSection").classList.remove("hidden");
-    document.getElementById("dashboardSection").classList.add("hidden");
-    document.getElementById("campus").value = "";
-    document.getElementById("password").value = "";
-    document.getElementById("errorMsg").style.display = "none";
+// ---------- Staff accounts (super admin only) ----------
+
+async function loadStaffList() {
+    const tbody = document.getElementById("staffTableBody");
+    showMessage("staffErrorMsg", "");
+
+    const result = await DaystarApi.request("/api/admin/staff");
+    if (result.status === 401) {
+        handleSessionEnded();
+        return;
+    }
+    if (!result.ok) {
+        showMessage("staffErrorMsg", result.data?.error || "Could not load staff accounts.");
+        return;
+    }
+
+    tbody.innerHTML = result.data.map(staff => {
+        const isSelf = staff.id === currentStaff.id;
+        const canChange = !isSelf && staff.role !== "super_admin";
+        const toggleButton = canChange
+            ? `<button class="bus-btn btn-toggle" onclick="setStaffActive('${escapeHtml(staff.id)}', ${!staff.active})">${staff.active ? "Deactivate" : "Activate"}</button>`
+            : "";
+        return `
+            <tr>
+                <td>${escapeHtml(staff.name)}${isSelf ? " (you)" : ""}</td>
+                <td>${escapeHtml(staff.email)}</td>
+                <td>${escapeHtml(ROLE_LABELS[staff.role] || staff.role)}</td>
+                <td>${escapeHtml(CAMPUS_LABELS[staff.campus] || "-")}</td>
+                <td>${staff.active ? "Active" : "Deactivated"}</td>
+                <td>${toggleButton}</td>
+            </tr>`;
+    }).join("");
 }
 
-// Check if already logged in
-window.addEventListener("DOMContentLoaded", () => {
-    const savedCampus = localStorage.getItem("adminCampus");
-    if (savedCampus) {
-        currentAdmin = savedCampus;
-        showDashboard();
+async function createStaff() {
+    showMessage("staffErrorMsg", "");
+    const body = {
+        name: document.getElementById("newStaffName").value.trim(),
+        email: document.getElementById("newStaffEmail").value.trim(),
+        role: document.getElementById("newStaffRole").value,
+        campus: document.getElementById("newStaffCampus").value,
+        phone_number: document.getElementById("newStaffPhone").value.trim()
+    };
+
+    if (!body.name || !body.email) {
+        showMessage("staffErrorMsg", "Name and email are required.");
+        return;
+    }
+
+    const result = await DaystarApi.request("/api/admin/staff", { method: "POST", body });
+    if (result.status === 401) {
+        handleSessionEnded();
+        return;
+    }
+    if (!result.ok) {
+        showMessage("staffErrorMsg", result.data?.error || "Could not add staff member.");
+        return;
+    }
+
+    ["newStaffName", "newStaffEmail", "newStaffPhone"].forEach(id => { document.getElementById(id).value = ""; });
+    loadStaffList();
+}
+
+async function setStaffActive(staffId, active) {
+    const result = await DaystarApi.request(`/api/admin/staff/${encodeURIComponent(staffId)}`, { method: "PATCH", body: { active } });
+    if (result.status === 401) {
+        handleSessionEnded();
+        return;
+    }
+    if (!result.ok) {
+        showMessage("staffErrorMsg", result.data?.error || "Could not update staff member.");
+        return;
+    }
+    loadStaffList();
+}
+
+async function adminLogout() {
+    try {
+        await DaystarApi.request("/api/staff/auth/logout", { method: "POST" });
+    } catch (error) {
+        console.error("Logout request failed", error);
+    }
+    currentAdmin = null;
+    currentStaff = null;
+    document.getElementById("loginSection").classList.remove("hidden");
+    document.getElementById("dashboardSection").classList.add("hidden");
+    document.getElementById("staffEmail").value = "";
+    showEmailStep();
+}
+
+// Resume an existing session (the login cookie is HttpOnly, so ask the server).
+window.addEventListener("DOMContentLoaded", async () => {
+    localStorage.removeItem("adminCampus"); // left over from the old password login
+    try {
+        const result = await DaystarApi.request("/api/staff/auth/session");
+        if (result.ok && result.data?.staff) {
+            startSession(result.data.staff);
+        }
+    } catch (error) {
+        console.error("Session check failed", error);
     }
 });
 

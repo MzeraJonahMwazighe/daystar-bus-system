@@ -5,6 +5,7 @@ const Booking = require('../models/Booking');
 const Bus = require('../models/Bus');
 const Trip = require('../models/Trip');
 const { optionalStudentAuth } = require('../middleware/requireStudentAuth');
+const { requireStaff } = require('../middleware/requireStaffAuth');
 const { confirmBookingPayment } = require('../lib/paymentHelpers');
 
 function serializeBooking(booking) {
@@ -22,7 +23,8 @@ function serializeBooking(booking) {
   };
 }
 
-router.get('/', async (req, res) => {
+// Listing every booking is an admin-only view.
+router.get('/', requireStaff('campus_admin'), async (req, res) => {
   try {
     const bookings = await Booking.find({}).populate('bus').lean();
     res.json(bookings.map(serializeBooking));
@@ -105,7 +107,11 @@ router.post('/', optionalStudentAuth, async (req, res) => {
       (student.pass_route === 'all' || String(student.pass_route) === routeId)
     );
 
-    const bookingIdOverride = req.headers['x-fixed-booking-id'];
+    // Test hook used by backend/scripts/bookingRouteStressTest.js. Ignored in production
+    // so a client can never choose its own booking ID on the live site.
+    const bookingIdOverride = process.env.NODE_ENV !== 'production'
+      ? req.headers['x-fixed-booking-id']
+      : undefined;
     const bookingId = bookingIdOverride || generateTicketNumber();
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
     const now = new Date();

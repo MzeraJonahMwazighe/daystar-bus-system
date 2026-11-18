@@ -597,6 +597,7 @@ header p{
 
 </div>
 
+<script src="js/api.js"></script>
 <script>
 
 // ========== BUS CONFIGURATION ==========
@@ -1072,7 +1073,7 @@ async function proceedToPayment() {
 }
 
 // ========== API FUNCTIONS ==========
-const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
+const API_BASE = window.DaystarApi.base;
 
 async function loadBusesFromAPI() {
     const loadingEl = document.getElementById("busListLoading");

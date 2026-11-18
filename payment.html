@@ -145,6 +145,7 @@ style="padding:10px; width:220px; border-radius:6px; border:none;"
 
 </div>
 
+<script src="js/api.js"></script>
 <script>
 /* Get data from localStorage */
 const selectedSeats = JSON.parse(localStorage.getItem("selectedSeats")) || [];
@@ -153,7 +154,7 @@ let passengerName = localStorage.getItem("passengerName") || "";
 let phoneNumber = localStorage.getItem("phoneNumber") || "";
 let total = null;
 let bookingData = null;
-const apiBase = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://daystar-bus-system-dvd9.onrender.com');
+const apiBase = window.DaystarApi.base;
 
 async function loadBookingSummary() {
     const bookingId = localStorage.getItem("bookingId");
@@ -246,9 +247,6 @@ function showPaymentStatus(message, isPending = false) {
 }
 
 async function pollForConfirmedTicket(bookingId, phone) {
-    const apiBase = window.API_BASE || (window.location.hostname === 'localhost'
-        ? 'http://localhost:3000'
-        : 'https://daystar-bus-system-dvd9.onrender.com');
     const pollInterval = 3000;
     const timeout = 90000;
     const startedAt = Date.now();
