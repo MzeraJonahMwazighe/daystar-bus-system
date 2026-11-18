@@ -186,6 +186,7 @@ router.post('/', optionalStudentAuth, async (req, res) => {
       alightingStop: normalizedAlightingStop,
       destination: normalizedAlightingStop,
       total_amount: adjustedAmount,
+      student: student?._id || null,
       passenger_name: passengerName,
       phone_number: phoneNumber,
       status: 'reserved',

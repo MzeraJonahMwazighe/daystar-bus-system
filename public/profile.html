@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Profile</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+
+<body class="page-scroll">
+
+<!-- Bus pass -->
+<div class="profile-card pass-card" id="passCard">
+    <h2><i class="fas fa-id-card"></i> Bus pass</h2>
+    <div class="pass-status" id="passStatus">Loading…</div>
+    <div id="passDetails"></div>
+    <button class="primary-btn" id="buyPassBtn" style="display:none;" disabled>Buy a pass (coming soon)</button>
+</div>
+
+<!-- Details -->
+<div class="profile-card">
+    <h2><i class="fas fa-user"></i> My details</h2>
+    <div class="detail-row"><span>Email</span><span id="emailValue"></span></div>
+    <div class="detail-row"><span>Admission no.</span><span id="admissionValue"></span></div>
+    <label class="field" style="margin-top:16px;">
+        <span>Full name</span>
+        <input type="text" id="nameInput" maxlength="80">
+    </label>
+    <label class="field">
+        <span>Phone number</span>
+        <input type="tel" id="phoneInput" maxlength="10" placeholder="07XXXXXXXX">
+    </label>
+    <button class="primary-btn" id="saveBtn" onclick="saveProfile()">Save changes</button>
+    <div class="msg info" id="saveInfo"></div>
+    <div class="msg error" id="saveError"></div>
+</div>
+
+<!-- Bookings -->
+<div class="profile-card">
+    <h2><i class="fas fa-ticket"></i> My bookings</h2>
+    <div id="bookingList">Loading…</div>
+</div>
+
+<div class="profile-card">
+    <button class="primary-btn" onclick="window.location.href='campus.html'">Book a bus</button>
+    <button class="secondary-btn" onclick="logout()">Log out</button>
+</div>
+
+<div class="bottom-nav">
+    <div class="nav-item" onclick="window.location.href='index.html'">
+        <i class="fas fa-home"></i>
+        <span>Home</span>
+    </div>
+    <div class="nav-item active">
+        <i class="fas fa-user"></i>
+        <span>Profile</span>
+    </div>
+</div>
+
+<script src="js/api.js"></script>
+<script>
+
+function escapeHtml(value){
+    return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[ch])
+}
+
+function formatDate(value){
+    if (!value) return ""
+    return new Date(value).toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" })
+}
+
+function showMessage(id, text){
+    const el = document.getElementById(id)
+    el.textContent = text
+    el.style.display = text ? "block" : "none"
+}
+
+function renderPass(student){
+    const card = document.getElementById("passCard")
+    const status = document.getElementById("passStatus")
+    const details = document.getElementById("passDetails")
+    const now = new Date()
+    const from = student.pass_valid_from ? new Date(student.pass_valid_from) : null
+    const until = student.pass_valid_until ? new Date(student.pass_valid_until) : null
+    const active = student.has_bus_pass && from && until && from <= now && until >= now
+
+    if (active){
+        card.classList.add("active")
+        status.textContent = "Active"
+        details.innerHTML = `
+            <div class="detail-row"><span>Valid from</span><span>${escapeHtml(formatDate(from))}</span></div>
+            <div class="detail-row"><span>Valid until</span><span>${escapeHtml(formatDate(until))}</span></div>
+            <p style="color:#c7d4e5;">Trips your pass covers are booked without M-Pesa payment.</p>`
+        return
+    }
+
+    card.classList.remove("active")
+    status.textContent = student.has_bus_pass && until && until < now ? "Expired" : "No bus pass"
+    details.innerHTML = until && until < now
+        ? `<div class="detail-row"><span>Expired on</span><span>${escapeHtml(formatDate(until))}</span></div>`
+        : `<p style="color:#c7d4e5;">You pay for each trip with M-Pesa.</p>`
+    document.getElementById("buyPassBtn").style.display = "block"
+}
+
+function renderBookings(bookings){
+    const list = document.getElementById("bookingList")
+    if (!bookings.length){
+        list.innerHTML = `<p style="color:#c7d4e5;">No bookings yet. Bookings you make while logged in will show here.</p>`
+        return
+    }
+
+    list.innerHTML = bookings.map(booking => {
+        const status = escapeHtml(booking.status)
+        const paidWith = booking.payment_method === "pass" ? "Bus pass" : `KES ${escapeHtml(booking.total_amount)}`
+        const when = booking.trip_date && booking.departure_time
+            ? `${escapeHtml(booking.trip_date)} at ${escapeHtml(booking.departure_time)}`
+            : escapeHtml(formatDate(booking.created_at))
+        return `
+            <div class="booking-item">
+                <strong>${escapeHtml(booking.boardingStop)} → ${escapeHtml(booking.alightingStop)}</strong>
+                <span class="badge ${status}">${status}</span><br>
+                Bus ${escapeHtml(booking.bus_id || "-")} · Seat ${escapeHtml(booking.seats)} · ${paidWith}<br>
+                <span style="color:#9fb3c9;">${when} · ${escapeHtml(booking.booking_id)}</span>
+            </div>`
+    }).join("")
+}
+
+async function saveProfile(){
+    showMessage("saveInfo", "")
+    showMessage("saveError", "")
+    const body = {
+        name: document.getElementById("nameInput").value.trim(),
+        phone_number: document.getElementById("phoneInput").value.trim()
+    }
+    if (!/^07\d{8}$/.test(body.phone_number)){
+        showMessage("saveError", "Please enter your phone number as 07XXXXXXXX.")
+        return
+    }
+
+    const button = document.getElementById("saveBtn")
+    button.disabled = true
+    try {
+        const result = await DaystarApi.request("/api/auth/me", { method: "PATCH", body })
+        if (result.status === 401){
+            window.location.href = "login.html?next=profile.html"
+            return
+        }
+        if (!result.ok){
+            showMessage("saveError", result.data?.error || "Could not save your changes.")
+            return
+        }
+        showMessage("saveInfo", "Saved.")
+    } finally {
+        button.disabled = false
+    }
+}
+
+async function logout(){
+    await DaystarApi.request("/api/auth/logout", { method: "POST" })
+    localStorage.removeItem("passengerName")
+    localStorage.removeItem("phoneNumber")
+    window.location.href = "index.html"
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+    const student = await DaystarApi.currentStudent()
+    if (!student){
+        window.location.href = "login.html?next=profile.html"
+        return
+    }
+
+    document.getElementById("emailValue").textContent = student.email
+    document.getElementById("admissionValue").textContent = student.admission_number
+    document.getElementById("nameInput").value = student.name
+    document.getElementById("phoneInput").value = student.phone_number || ""
+    renderPass(student)
+
+    const bookings = await DaystarApi.request("/api/auth/me/bookings")
+    if (bookings.ok){
+        renderBookings(bookings.data)
+    } else {
+        document.getElementById("bookingList").textContent = "Could not load your bookings."
+    }
+})
+
+</script>
+
+</body>
+</html>

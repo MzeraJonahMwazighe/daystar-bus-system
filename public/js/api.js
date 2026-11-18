@@ -23,5 +23,16 @@
     return { ok: response.ok, status: response.status, data };
   }
 
-  window.DaystarApi = { base, request };
+  // The logged-in student's profile, or null for guests. The login cookie is HttpOnly,
+  // so pages can't read it directly and ask the server instead.
+  async function currentStudent() {
+    try {
+      const result = await request('/api/auth/me');
+      return result.ok ? result.data.student : null;
+    } catch {
+      return null;
+    }
+  }
+
+  window.DaystarApi = { base, request, currentStudent };
 })();

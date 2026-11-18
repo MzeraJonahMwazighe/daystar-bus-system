@@ -74,8 +74,15 @@ concurrent payment confirmation.
 - bookings.js: full CRUD, the atomic seat-lock lives here
 - mpesa.js: POST /api/mpesa/stk-push, POST /api/mpesa/callback - real Daraja sandbox
   integration, tested end-to-end
-- auth.js: student login - POST /api/auth/request-otp, POST /api/auth/verify-otp (sets the
-  `student_session` cookie, 7 days), GET /api/auth/session
+- auth.js: student login and sign-up - POST /api/auth/request-otp (any @daystar.ac.ke email
+  gets a code, account or not, so the reply never reveals who has an account),
+  POST /api/auth/verify-otp (existing account -> `student_session` cookie, 7 days; no account
+  -> 15-minute `signup_session` cookie, path /api/auth), POST /api/auth/complete-profile
+  (creates the Student; email comes only from the signup cookie; admission number is read
+  from the email's trailing digits, or typed if there are none), GET /api/auth/session,
+  GET/PATCH /api/auth/me (own profile; only name and phone are editable),
+  GET /api/auth/me/bookings, POST /api/auth/logout
+- Bookings made while logged in store `student` (ObjectId); guest bookings keep it null.
 - staffAuth.js: staff login - POST /api/staff/auth/request-otp, verify-otp (sets the
   `staff_session` cookie, 12 hours), GET session, POST logout
 - admin.js: every route requires a campus_admin or super_admin login (router-level
@@ -95,7 +102,9 @@ concurrent payment confirmation.
 - Session tokens (backend/lib/sessionToken.js) carry an `aud` claim. studentSession.js and
   staffSession.js each refuse the other's tokens. Staff role/active status is re-read from
   the database on every request (middleware/requireStaffAuth.js), so deactivation is instant.
-- Frontend pages load js/api.js for the API base URL (relative paths; no hardcoded Render URL).
+- Frontend pages live in public/ (the only folder Express serves) and load js/api.js for the
+  API base URL (relative paths; no hardcoded Render URL). login.html handles log in + sign-up,
+  profile.html shows details, bus pass status and booking history.
 
 ### Known constraints / accepted limitations
 - Free-tier hosting (Render + Atlas): under heavy concurrent load (~40 simultaneous
@@ -127,8 +136,8 @@ concurrent payment confirmation.
 Student OTP login, JWT sessions and pass-covered bookings are done. The expansion roadmap
 (agreed November 2026), one reviewed commit per phase:
 
-1. Foundations - staff accounts with roles, locked admin routes, shared js/api.js (this phase)
-2. Student sign-up + profile page (admission number read from the email, e.g.
+1. Foundations - staff accounts with roles, locked admin routes, shared js/api.js (done)
+2. Student sign-up + profile page (done) (admission number read from the email, e.g.
    jonahmzera251582@daystar.ac.ke -> 251582), booking history, pass status
 3. Real trip scheduling - two campus admins (Athi River, Nairobi) plan departures the day
    before (bus, driver, time); students book a trip instead of "a bus"

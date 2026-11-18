@@ -136,8 +136,10 @@ app.get('/api/ticket/:bookingId', async (req, res) => {
     }
 });
 
-// Serve static files from frontend
-app.use(express.static(path.join(__dirname, '..')));
+// Serve the frontend pages. Only public/ is served, so backend code, docs and
+// config files in the project root are never reachable from the browser.
+const PUBLIC_DIR = path.join(__dirname, '..', 'public');
+app.use(express.static(PUBLIC_DIR));
 
 // Routes
 app.use('/api/buses', require('./routes/buses'));
@@ -159,7 +161,7 @@ app.get('/health', (req, res) => {
 
 // Serve main page
 app.get('/', (req, res) => {
-   res.sendFile(path.join(__dirname, '../index.html'));
+   res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
 });
 
 // Error handling middleware

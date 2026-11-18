@@ -60,7 +60,16 @@ Show Available Buses
 
 </div>
 
+<script src="js/api.js"></script>
 <script>
+
+// Logged-in students get their name and phone filled in from their profile.
+window.addEventListener("DOMContentLoaded", async () => {
+    const student = await DaystarApi.currentStudent()
+    if (!student) return
+    if (!passengerNameInput.value) passengerNameInput.value = student.name || ""
+    if (!phoneInput.value) phoneInput.value = student.phone_number || ""
+})
 
 const passengerNameInput = document.getElementById("passengerName");
 const phoneInput = document.getElementById("phoneNumber");

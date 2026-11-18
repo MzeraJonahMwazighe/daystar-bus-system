@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Daystar Bus Booking</title>
+
+<link rel="stylesheet" href="styles.css">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+
+</head>
+
+<body>
+
+<div class="welcome-container">
+
+<div class="bus-icon">
+<i class="fas fa-bus"></i>
+</div>
+
+<h1 class="welcome-title" id="welcomeTitle">Welcome.</h1>
+
+<p class="welcome-text" id="welcomeText">
+Daystar University Bus Booking System.<br>
+Book your journey safely and conveniently.
+</p>
+
+<!-- Shown to guests -->
+<div class="welcome-actions" id="guestActions">
+<button class="start-btn" onclick="goTo('login.html')">
+Log in / Sign up <i class="fas fa-arrow-right"></i>
+</button>
+<button class="ghost-btn" onclick="goTo('campus.html')">
+Continue as guest
+</button>
+</div>
+
+<!-- Shown to logged-in students -->
+<div class="welcome-actions" id="studentActions" style="display:none;">
+<button class="start-btn" onclick="goTo('campus.html')">
+Book a bus <i class="fas fa-arrow-right"></i>
+</button>
+<button class="ghost-btn" onclick="goTo('profile.html')">
+My profile
+</button>
+</div>
+
+</div>
+
+
+<!-- Bottom Navigation -->
+
+<div class="bottom-nav">
+
+<div class="nav-item active">
+<i class="fas fa-home"></i>
+<span>Home</span>
+</div>
+
+<div class="nav-item" onclick="goToProfile()">
+<i class="fas fa-user"></i>
+<span>Profile</span>
+</div>
+
+<div class="nav-item" onclick="goTo('admin.html')">
+<i class="fas fa-shield-halved"></i>
+<span>Admin</span>
+</div>
+
+</div>
+
+<script src="js/api.js"></script>
+<script>
+
+let loggedInStudent = null;
+
+function goTo(page){
+    window.location.href = page
+}
+
+function goToProfile(){
+    goTo(loggedInStudent ? "profile.html" : "login.html?next=profile.html")
+}
+
+window.addEventListener("DOMContentLoaded", async () => {
+    loggedInStudent = await DaystarApi.currentStudent()
+    if (!loggedInStudent) return
+
+    const firstName = loggedInStudent.name.split(" ")[0]
+    document.getElementById("welcomeTitle").textContent = `Hi, ${firstName}.`
+    document.getElementById("welcomeText").textContent = "Ready for your next trip?"
+    document.getElementById("guestActions").style.display = "none"
+    document.getElementById("studentActions").style.display = "flex"
+})
+
+</script>
+
+</body>
+</html>

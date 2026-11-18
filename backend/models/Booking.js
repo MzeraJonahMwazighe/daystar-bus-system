@@ -9,6 +9,8 @@ const BookingSchema = new mongoose.Schema({
   alightingStop: { type: String, required: true },
   destination: { type: String, required: true },
   total_amount: { type: Number, required: true },
+  // Set when a logged-in student makes the booking; guest bookings leave it empty.
+  student: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', default: null, index: true },
   passenger_name: { type: String },
   phone_number: { type: String },
   checkout_request_id: { type: String, index: true },
