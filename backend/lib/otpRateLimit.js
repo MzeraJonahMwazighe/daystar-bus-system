@@ -63,6 +63,28 @@ async function acquireOtpRateLimit(email, now = new Date()) {
   }
 }
 
+// Gives back a request slot when the code could not be emailed, so the person can retry
+// straight away instead of waiting out the 60-second cooldown for an email that never came.
+// Only undoes the exact acquisition passed in (matched by its last_requested_at timestamp).
+async function releaseOtpRateLimit(email, acquiredRateLimit) {
+  if (!acquiredRateLimit?.last_requested_at) return false;
+
+  const result = await OtpRateLimit.updateOne(
+    { email, last_requested_at: acquiredRateLimit.last_requested_at },
+    [
+      {
+        $set: {
+          last_requested_at: new Date(0),
+          request_count: { $max: [0, { $subtract: ['$request_count', 1] }] }
+        }
+      }
+    ]
+  );
+
+  return result.modifiedCount === 1;
+}
+
 module.exports = {
-  acquireOtpRateLimit
+  acquireOtpRateLimit,
+  releaseOtpRateLimit
 };

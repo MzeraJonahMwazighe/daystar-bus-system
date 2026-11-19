@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const axios = require('axios');
 const nodemailer = require('nodemailer');
 const OtpCode = require('../models/OtpCode');
 
@@ -54,22 +55,98 @@ function createSmtpTransport() {
   });
 }
 
+// Thrown when the code could not be emailed. Routes turn this into a clear 503 message.
+class OtpDeliveryError extends Error {
+  constructor(message, cause) {
+    super(message);
+    this.name = 'OtpDeliveryError';
+    this.code = 'OTP_DELIVERY_FAILED';
+    this.cause = cause;
+  }
+}
+
+// "Daystar Bus <buses@example.com>" -> { name: 'Daystar Bus', email: 'buses@example.com' }
+// "buses@example.com"               -> { name: 'Daystar Bus System', email: 'buses@example.com' }
+function parseSender(value) {
+  const text = String(value || '').trim();
+  const match = /^(.*)<([^>]+)>$/.exec(text);
+  if (match) {
+    return { name: match[1].trim().replace(/^"|"$/g, '') || 'Daystar Bus System', email: match[2].trim() };
+  }
+  return { name: 'Daystar Bus System', email: text };
+}
+
+function buildOtpMessage(code, audience) {
+  const isStaff = audience === 'staff';
+  return {
+    subject: isStaff ? 'Daystar Bus System staff sign-in code' : 'Daystar Bus System verification code',
+    text: isStaff
+      ? `Your Daystar Bus System staff sign-in code is ${code}. It expires in 10 minutes.`
+      : `Your Daystar Bus System verification code is ${code}. It expires in 10 minutes.`
+  };
+}
+
+// Sends through Brevo's transactional email API over HTTPS (port 443), which hosting
+// providers do not block the way they sometimes block SMTP ports.
+async function sendWithBrevo(email, message) {
+  const sender = parseSender(process.env.EMAIL_FROM || process.env.SMTP_FROM);
+  if (!sender.email) {
+    throw new Error('EMAIL_FROM is required to send email with Brevo');
+  }
+
+  const response = await axios.post(
+    process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email',
+    {
+      sender,
+      to: [{ email }],
+      subject: message.subject,
+      textContent: message.text
+    },
+    {
+      headers: {
+        'api-key': process.env.BREVO_API_KEY,
+        'content-type': 'application/json',
+        accept: 'application/json'
+      },
+      timeout: 10000
+    }
+  );
+
+  return response.data;
+}
+
+async function sendWithSmtp(email, message) {
+  const transporter = createSmtpTransport();
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM || process.env.SMTP_FROM,
+    to: email,
+    subject: message.subject,
+    text: message.text
+  });
+}
+
+// Delivery order: console (local development only) -> Brevo API (if BREVO_API_KEY is set) -> SMTP.
 async function deliverOtp(email, code, audience = 'student') {
   if (process.env.OTP_DELIVERY_MODE === 'console' && process.env.NODE_ENV !== 'production') {
     console.log(`OTP console delivery: ${email} ${code}`);
     return;
   }
 
-  const isStaff = audience === 'staff';
-  const transporter = createSmtpTransport();
-  await transporter.sendMail({
-    from: process.env.SMTP_FROM,
-    to: email,
-    subject: isStaff ? 'Daystar Bus System staff sign-in code' : 'Daystar Bus System verification code',
-    text: isStaff
-      ? `Your Daystar Bus System staff sign-in code is ${code}. It expires in 10 minutes.`
-      : `Your Daystar Bus System verification code is ${code}. It expires in 10 minutes.`
-  });
+  const message = buildOtpMessage(code, audience);
+  try {
+    if (process.env.BREVO_API_KEY) {
+      await sendWithBrevo(email, message);
+    } else {
+      await sendWithSmtp(email, message);
+    }
+  } catch (error) {
+    // Log the provider's reason (never the code itself), then report a delivery failure.
+    const reason = error.response
+      ? `HTTP ${error.response.status} ${JSON.stringify(error.response.data)}`
+      : error.message;
+    console.error(`OTP email delivery failed for ${email}: ${reason}`);
+    throw new OtpDeliveryError('Unable to send the verification email', error);
+  }
 }
 
 // Invalidates any unused code for this email + audience, stores a new hashed code and sends it.
@@ -137,6 +214,8 @@ async function consumeOtp(email, code, audience) {
 
 module.exports = {
   OTP_AUDIENCES,
+  OtpDeliveryError,
+  parseSender,
   getOtpHash,
   issueOtp,
   consumeOtp

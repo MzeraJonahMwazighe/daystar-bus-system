@@ -1,6 +1,6 @@
 const express = require('express');
 const Staff = require('../models/Staff');
-const { acquireOtpRateLimit } = require('../lib/otpRateLimit');
+const { acquireOtpRateLimit, releaseOtpRateLimit } = require('../lib/otpRateLimit');
 const { issueOtp, consumeOtp } = require('../lib/otp');
 const { signStaffSession, STAFF_SESSION_TTL_SECONDS } = require('../lib/staffSession');
 const { requireStaff } = require('../middleware/requireStaffAuth');
@@ -52,7 +52,15 @@ router.post('/request-otp', async (req, res) => {
       return res.status(200).json(GENERIC_OTP_RESPONSE);
     }
 
-    await issueOtp(email, 'staff');
+    try {
+      await issueOtp(email, 'staff');
+    } catch (error) {
+      if (error.code === 'OTP_DELIVERY_FAILED') {
+        await releaseOtpRateLimit(email, rateLimitResult.rateLimit).catch(() => {});
+        return res.status(503).json({ error: "We couldn't send the email right now. Please try again in a moment." });
+      }
+      throw error;
+    }
     return res.status(200).json(GENERIC_OTP_RESPONSE);
   } catch (error) {
     console.error('Staff OTP request failed:', error.message);

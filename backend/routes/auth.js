@@ -1,7 +1,7 @@
 const express = require('express');
 const Booking = require('../models/Booking');
 const Student = require('../models/Student');
-const { acquireOtpRateLimit } = require('../lib/otpRateLimit');
+const { acquireOtpRateLimit, releaseOtpRateLimit } = require('../lib/otpRateLimit');
 const { issueOtp, consumeOtp } = require('../lib/otp');
 const { validatePhoneNumber } = require('../lib/bookingHelpers');
 const { readCookie } = require('../lib/cookies');
@@ -25,6 +25,7 @@ const SIGNUP_COOKIE_OPTIONS = {
   path: '/api/auth'
 };
 const MAX_NAME_LENGTH = 80;
+const EMAIL_UNAVAILABLE_MESSAGE = "We couldn't send the email right now. Please try again in a moment.";
 
 function serializeStudent(student) {
   return {
@@ -85,7 +86,15 @@ router.post('/request-otp', async (req, res) => {
       return res.status(429).json({ error: 'Please wait before requesting another OTP' });
     }
 
-    await issueOtp(email, 'student');
+    try {
+      await issueOtp(email, 'student');
+    } catch (error) {
+      if (error.code === 'OTP_DELIVERY_FAILED') {
+        await releaseOtpRateLimit(email, rateLimitResult.rateLimit).catch(() => {});
+        return res.status(503).json({ error: EMAIL_UNAVAILABLE_MESSAGE });
+      }
+      throw error;
+    }
 
     return res.status(200).json(GENERIC_OTP_RESPONSE);
   } catch (error) {

@@ -18,6 +18,10 @@ services:
         sync: false
       - key: OTP_HMAC_SECRET
         sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: SMTP_HOST
         sync: false
       - key: SMTP_PORT

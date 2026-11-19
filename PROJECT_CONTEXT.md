@@ -96,6 +96,9 @@ concurrent payment confirmation.
   'athi' | 'nairobi' (required for campus_admin), active flag. No self sign-up: the first
   super admin is created with `node backend/scripts/create-staff.js`, then super admins add
   campus admins and drivers from admin.html.
+- Codes are emailed through Brevo's HTTPS API when BREVO_API_KEY is set (sender from
+  EMAIL_FROM), otherwise SMTP; OTP_DELIVERY_MODE=console prints them locally. A failed send
+  returns 503 with a clear message, cancels the code and gives back the rate-limit slot.
 - One-time codes (backend/lib/otp.js) are shared by both logins. Each code has an
   `audience` ('student' | 'staff'), and staff codes are hashed with a different prefix, so a
   student code can never sign someone in as staff.
