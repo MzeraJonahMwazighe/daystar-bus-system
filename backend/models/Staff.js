@@ -17,7 +17,9 @@ const StaffSchema = new mongoose.Schema({
   role: { type: String, required: true, enum: STAFF_ROLES },
   campus: { type: String, enum: [...STAFF_CAMPUSES, null], default: null },
   phone_number: { type: String, trim: true },
-  active: { type: Boolean, default: true }
+  active: { type: Boolean, default: true },
+  // Drivers only: bumped inside every trip create/edit that assigns them (see Bus.schedule_version).
+  schedule_version: { type: Number, default: 0 }
 }, {
   timestamps: true
 });

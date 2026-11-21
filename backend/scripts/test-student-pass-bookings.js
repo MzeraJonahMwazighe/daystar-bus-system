@@ -22,7 +22,13 @@ const TEST_EMAILS = [
   'otp-pass-expired-test@daystar.ac.ke',
   'otp-pass-route-test@daystar.ac.ke'
 ];
-const TRIP_DATE = '2026-10-05';
+
+// Phase 3: bookings need a scheduled trip leaving today or tomorrow (Nairobi time).
+const { addDays, departsAt, nairobiDateString } = require('../lib/tripSchedule');
+const TOMORROW = addDays(nairobiDateString(), 1);
+const TRIP_DATE = TOMORROW;
+// Pass windows are relative to the trip date so the test keeps working on any day.
+const dayOffset = (days) => new Date(`${addDays(TRIP_DATE, days)}T00:00:00.000Z`);
 const created = { routeIds: [], busIds: [], tripIds: [], bookingIds: [], ticketIds: [] };
 
 async function request(server, path, { method = 'GET', body, cookie } = {}) {
@@ -56,19 +62,21 @@ async function makeTrip(route, plate) {
     route: route._id,
     trip_date: TRIP_DATE,
     departure_time: '10:00',
-    status: 'active',
+    departs_at: departsAt(TRIP_DATE, '10:00'),
+    campus: 'test',
+    status: 'scheduled',
     seats: makeSeats(bus.capacity)
   });
   created.tripIds.push(trip._id);
-  return bus;
+  return { plate: bus.plate, tripId: String(trip._id) };
 }
 
-async function createBooking(server, { busPlate, seat, email, cookie }) {
+async function createBooking(server, { tripId, seat, email, cookie }) {
   const result = await request(server, '/api/bookings', {
     method: 'POST',
     cookie,
     body: {
-      busPlate,
+      tripId,
       seats: [seat],
       boardingStop: 'Test Start',
       alightingStop: 'Test End',
@@ -137,16 +145,16 @@ async function main() {
   const students = await Student.create([
     {
       email: TEST_EMAILS[0], name: 'Pass Holder', admission_number: 'PASS-VALID', has_bus_pass: true,
-      pass_valid_from: new Date('2026-10-01T00:00:00.000Z'), pass_valid_until: new Date('2026-10-31T23:59:59.999Z'), pass_route: String(route._id)
+      pass_valid_from: dayOffset(-4), pass_valid_until: dayOffset(26), pass_route: String(route._id)
     },
     { email: TEST_EMAILS[1], name: 'No Pass', admission_number: 'PASS-NONE', has_bus_pass: false },
     {
       email: TEST_EMAILS[2], name: 'Expired Pass', admission_number: 'PASS-EXPIRED', has_bus_pass: true,
-      pass_valid_from: new Date('2026-09-01T00:00:00.000Z'), pass_valid_until: new Date('2026-09-30T23:59:59.999Z'), pass_route: String(route._id)
+      pass_valid_from: dayOffset(-34), pass_valid_until: dayOffset(-5), pass_route: String(route._id)
     },
     {
       email: TEST_EMAILS[3], name: 'Other Route Pass', admission_number: 'PASS-OTHER-ROUTE', has_bus_pass: true,
-      pass_valid_from: new Date('2026-10-01T00:00:00.000Z'), pass_valid_until: new Date('2026-10-31T23:59:59.999Z'), pass_route: String(otherRoute._id)
+      pass_valid_from: dayOffset(-4), pass_valid_until: dayOffset(26), pass_route: String(otherRoute._id)
     }
   ]);
 
@@ -246,7 +254,7 @@ async function main() {
     console.log('SESSION expired token:', JSON.stringify(sessionExpired, null, 2));
     assert.equal(sessionExpired.status, 401);
 
-    const passBooking = await createBooking(server, { busPlate: buses[0].plate, seat: 1, email: TEST_EMAILS[0], cookie: validCookie });
+    const passBooking = await createBooking(server, { tripId: buses[0].tripId, seat: 1, email: TEST_EMAILS[0], cookie: validCookie });
     assert.equal(passBooking.status, 200);
     assert.equal(passBooking.body.payment_method, 'pass');
     assert.equal(passBooking.body.status, 'booked');
@@ -267,25 +275,25 @@ async function main() {
     assert.equal(stkRouteHits, 1);
 
     const noPassCookie = `student_session=${signStudentSession({ studentId: String(students[1]._id), email: students[1].email })}`;
-    const noPassBooking = await createBooking(server, { busPlate: buses[1].plate, seat: 1, email: TEST_EMAILS[1], cookie: noPassCookie });
+    const noPassBooking = await createBooking(server, { tripId: buses[1].tripId, seat: 1, email: TEST_EMAILS[1], cookie: noPassCookie });
     assert.equal(noPassBooking.body.payment_method, 'mpesa');
     const noPassStk = await attemptStkPush(server, noPassBooking.body.booking_id, 'no pass');
     assert.equal(noPassStk.status, 500);
     assert.match(noPassStk.body.error, /Daraja credentials are not configured/);
 
     const expiredCookie = `student_session=${signStudentSession({ studentId: String(students[2]._id), email: students[2].email })}`;
-    const expiredBooking = await createBooking(server, { busPlate: buses[2].plate, seat: 1, email: TEST_EMAILS[2], cookie: expiredCookie });
+    const expiredBooking = await createBooking(server, { tripId: buses[2].tripId, seat: 1, email: TEST_EMAILS[2], cookie: expiredCookie });
     assert.equal(expiredBooking.body.payment_method, 'mpesa');
     const expiredStk = await attemptStkPush(server, expiredBooking.body.booking_id, 'expired pass');
     assert.equal(expiredStk.status, 500);
 
     const wrongRouteCookie = `student_session=${signStudentSession({ studentId: String(students[3]._id), email: students[3].email })}`;
-    const wrongRouteBooking = await createBooking(server, { busPlate: buses[3].plate, seat: 1, email: TEST_EMAILS[3], cookie: wrongRouteCookie });
+    const wrongRouteBooking = await createBooking(server, { tripId: buses[3].tripId, seat: 1, email: TEST_EMAILS[3], cookie: wrongRouteCookie });
     assert.equal(wrongRouteBooking.body.payment_method, 'mpesa');
     const wrongRouteStk = await attemptStkPush(server, wrongRouteBooking.body.booking_id, 'wrong route');
     assert.equal(wrongRouteStk.status, 500);
 
-    const anonymousBooking = await createBooking(server, { busPlate: buses[4].plate, seat: 1, email: 'anonymous', cookie: null });
+    const anonymousBooking = await createBooking(server, { tripId: buses[4].tripId, seat: 1, email: 'anonymous', cookie: null });
     assert.equal(anonymousBooking.body.payment_method, 'mpesa');
     const anonymousStk = await attemptStkPush(server, anonymousBooking.body.booking_id, 'anonymous');
     assert.equal(anonymousStk.status, 500);

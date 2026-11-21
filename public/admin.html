@@ -292,6 +292,131 @@ body {
     background: #c0392b;
 }
 
+.schedule-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: flex-end;
+    margin: 10px 0 15px;
+}
+
+.schedule-toolbar .form-group {
+    margin-bottom: 0;
+    min-width: 180px;
+}
+
+.schedule-toolbar .bus-btn {
+    flex: 0 0 auto;
+    padding: 12px 16px;
+}
+
+.btn-secondary {
+    background: #2c3e50;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #34495e;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c0392b;
+}
+
+.btn-small {
+    flex: 0 0 auto;
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.bus-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+.trip-table td {
+    vertical-align: middle;
+}
+
+.trip-actions {
+    white-space: nowrap;
+}
+
+.trip-actions .bus-btn + .bus-btn {
+    margin-left: 6px;
+}
+
+.row-cancelled td {
+    color: #7f8c8d;
+}
+
+.trip-status {
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: bold;
+    white-space: nowrap;
+    background: #2c3e50;
+}
+
+.trip-status-scheduled { background: #2ecc71; }
+.trip-status-cancelled { background: #e74c3c; }
+
+.muted,
+.section-note,
+.empty-note,
+.field-note {
+    color: #b0bec5;
+}
+
+.section-note {
+    margin: 0 0 12px;
+}
+
+.field-note {
+    font-size: 13px;
+    margin: 6px 0 0;
+}
+
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    box-sizing: border-box;
+}
+
+.modal-overlay .modal-content {
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.form-group select:disabled {
+    color: #7f8c8d;
+}
+
 .hidden {
     display: none !important;
 }
@@ -299,6 +424,10 @@ body {
 @media (max-width: 768px) {
     .bus-list {
         grid-template-columns: 1fr;
+    }
+
+    .campus-section {
+        padding: 18px;
     }
     
     .admin-container {
@@ -400,62 +529,90 @@ body {
         <div class="error-message" id="staffErrorMsg"></div>
     </div>
     
-    <!-- ATHI RIVER CAMPUS BUSES -->
-    <div class="campus-section" id="athiSection" style="display:none;">
-        <h2>🚌 Athi River Campus Buses</h2>
-        <div class="bus-list" id="athiBuses"></div>
+    <!-- DEPARTURES (one campus, one day) -->
+    <div class="campus-section" id="scheduleSection">
+        <h2 id="scheduleHeading">🗓️ Departures</h2>
+        <div class="schedule-toolbar">
+            <div class="form-group">
+                <label for="scheduleDate">Day</label>
+                <input type="date" id="scheduleDate" onchange="loadSchedule()">
+            </div>
+            <button class="bus-btn btn-toggle" onclick="openTripModal()">+ Add trip</button>
+            <button class="bus-btn btn-secondary" onclick="copyPreviousDay()" id="copyDayBtn">Copy the day before</button>
+        </div>
+        <div class="info-message" id="scheduleInfoMsg"></div>
+        <div class="error-message" id="scheduleErrorMsg"></div>
+        <div class="table-scroll">
+            <table class="staff-table trip-table">
+                <thead>
+                    <tr><th>Time</th><th>Route</th><th>Bus</th><th>Driver</th><th>Seats booked</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody id="tripTableBody"></tbody>
+            </table>
+        </div>
+        <p class="empty-note hidden" id="noTripsNote">No departures on this day yet. Add a trip, or copy the day before.</p>
     </div>
-    
-    <!-- NAIROBI CAMPUS BUSES -->
-    <div class="campus-section" id="nairoiSection" style="display:none;">
-        <h2>🚌 Nairobi Campus Buses</h2>
-        <div class="bus-list" id="nairoiBuses"></div>
+
+    <!-- REFUNDS DUE -->
+    <div class="campus-section hidden" id="refundSection">
+        <h2>💸 Refunds due</h2>
+        <p class="section-note">These students paid by M-Pesa for a trip that was cancelled, or their payment arrived after the seat hold ran out. Send the money back in M-Pesa, then mark it refunded here.</p>
+        <div class="table-scroll">
+            <table class="staff-table">
+                <thead>
+                    <tr><th>Trip</th><th>Passenger</th><th>Phone</th><th>Amount</th><th>M-Pesa receipt</th><th></th></tr>
+                </thead>
+                <tbody id="refundTableBody"></tbody>
+            </table>
+        </div>
+        <div class="error-message" id="refundErrorMsg"></div>
     </div>
-    
+
     <button class="bus-btn btn-logout" onclick="adminLogout()">Logout</button>
 </div>
 
-<!-- SCHEDULE MODAL -->
-<div class="modal-overlay" id="scheduleModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:2000; flex-direction:column; align-items:center; justify-content:center;">
-    <div class="modal-content" style="background:#1f2a38; border-radius:14px; padding:30px; max-width:500px; width:90%; border-left:6px solid #22c1c3;">
-        <h2 style="margin-top:0; color:#22c1c3;">Schedule Bus</h2>
-        
+<!-- ADD / EDIT TRIP -->
+<div class="modal-overlay hidden" id="tripModal">
+    <div class="modal-content">
+        <h2 id="tripModalTitle">Add trip</h2>
+        <p class="section-note" id="tripModalDate"></p>
+
         <div class="form-group">
-            <label>Bus Plate</label>
-            <input type="text" id="scheduleBusPlate" disabled style="background:#0f2027; color:#b0bec5; cursor:not-allowed;">
+            <label for="tripRoute">Route</label>
+            <select id="tripRoute"></select>
         </div>
-        
         <div class="form-group">
-            <label for="scheduleDay">Select Day</label>
-            <select id="scheduleDay" onchange="updateScheduleTimes()">
-                <option value="">-- Choose Day --</option>
-                <option value="monday">Monday</option>
-                <option value="tuesday">Tuesday</option>
-                <option value="wednesday">Wednesday</option>
-                <option value="thursday">Thursday</option>
-                <option value="friday">Friday</option>
-                <option value="saturday">Saturday</option>
-            </select>
+            <label for="tripTime">Departure time</label>
+            <input type="time" id="tripTime">
         </div>
-        
         <div class="form-group">
-            <label for="scheduleTime">Departure Time</label>
-            <select id="scheduleTime">
-                <option value="">-- Choose Time --</option>
-            </select>
+            <label for="tripBus">Bus</label>
+            <select id="tripBus"></select>
+            <p class="field-note hidden" id="tripBusNote">Students have booked seats on this trip, so the bus can't be changed.</p>
         </div>
-        
         <div class="form-group">
-            <label for="scheduleStatus">Bus Status</label>
-            <select id="scheduleStatus">
-                <option value="available">Available (Ready to Depart)</option>
-                <option value="departed">Departed (Left)</option>
-            </select>
+            <label for="tripDriver">Driver</label>
+            <select id="tripDriver"></select>
         </div>
-        
-        <div style="display:flex; gap:10px; margin-top:20px;">
-            <button class="bus-btn btn-toggle" onclick="saveSchedule()" style="flex:1;">Save Schedule</button>
-            <button class="bus-btn btn-logout" onclick="closeScheduleModal()" style="flex:1; background:#2c3e50; margin-top:0;">Cancel</button>
+
+        <div class="error-message" id="tripErrorMsg"></div>
+        <div class="modal-actions">
+            <button class="bus-btn btn-toggle" id="tripSaveBtn" onclick="saveTrip()">Save trip</button>
+            <button class="bus-btn btn-secondary" onclick="closeTripModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<!-- CANCEL TRIP -->
+<div class="modal-overlay hidden" id="cancelModal">
+    <div class="modal-content">
+        <h2>Cancel this trip?</h2>
+        <p class="section-note" id="cancelTripSummary"></p>
+        <div id="cancelAffected"></div>
+        <div class="error-message" id="cancelErrorMsg"></div>
+        <div class="modal-actions">
+            <button class="bus-btn btn-danger" id="cancelConfirmBtn" onclick="confirmCancelTrip()">Yes, cancel trip</button>
+            <button class="bus-btn btn-secondary" id="cancelCloseBtn" onclick="closeCancelModal()">Keep trip</button>
         </div>
     </div>
 </div>
@@ -463,36 +620,8 @@ body {
 <script src="js/api.js"></script>
 <script>
 
-// Bus data organized by campus
-const busesData = {
-    athi: [
-        { plate: "KDA347R", type: "new", seats: 45, status: "available", destination: "Sokimau/Nairobi" },
-        { plate: "KDC234K", type: "new", seats: 45, status: "available", destination: "Sokimau/Nairobi" },
-        { plate: "KCU978S", type: "old", seats: 29, status: "available", destination: "Sokimau/Nairobi" },
-        { plate: "KBX319D", type: "old", seats: 29, status: "departed", destination: "Sokimau/Nairobi" }
-    ],
-    nairobi: [
-        { plate: "KDE456K", type: "new", seats: 45, status: "available", destination: "Sokimau/Athi" },
-        { plate: "KCY564K", type: "new", seats: 45, status: "available", destination: "Sokimau/Athi" },
-        { plate: "KBX514D", type: "old", seats: 29, status: "available", destination: "Sokimau/Athi" },
-        { plate: "KCU453E", type: "old", seats: 29, status: "available", destination: "Sokimau/Athi" }
-    ]
-};
-
-// Predefined bus schedule by day
-const BUS_SCHEDULE = {
-    monday: ["08:00", "16:00", "17:00"],
-    tuesday: ["08:00", "13:00", "16:00", "17:00"],
-    wednesday: ["08:00", "16:00", "17:00"],
-    thursday: ["08:00", "16:00", "17:00"],
-    friday: ["08:00", "16:00", "17:00"],
-    saturday: ["10:00"],
-    sunday: []
-};
-
 let currentAdmin = null;   // campus being shown: "athi" or "nairobi"
 let currentStaff = null;   // signed-in staff member from the server
-let editingBusIdx = null;
 
 const ROLE_LABELS = { super_admin: "Super admin", campus_admin: "Campus admin", driver: "Driver" };
 const CAMPUS_LABELS = { athi: "Athi River", nairobi: "Nairobi" };
@@ -584,6 +713,7 @@ async function verifyStaffCode() {
 
 function startSession(staff) {
     currentStaff = staff;
+    scheduleOptions = null;
 
     if (staff.role === "driver") {
         DaystarApi.request("/api/staff/auth/logout", { method: "POST" });
@@ -629,173 +759,366 @@ function showDashboard() {
         loadStaffList();
     }
 
-    // Show appropriate campus section
-    if (currentAdmin === "athi") {
-        document.getElementById("athiSection").style.display = "block";
-        document.getElementById("nairoiSection").style.display = "none";
-        renderBusList("athi", document.getElementById("athiBuses"));
-    } else {
-        document.getElementById("athiSection").style.display = "none";
-        document.getElementById("nairoiSection").style.display = "block";
-        renderBusList("nairobi", document.getElementById("nairoiBuses"));
+    loadSchedule();
+    loadRefunds();
+}
+
+// ---------- Departures (trip schedule) ----------
+
+let scheduleOptions = null;  // buses, routes, drivers from the server
+let scheduleTrips = [];      // trips on the day being shown
+let editingTripId = null;    // null = adding a new trip
+let cancellingTripId = null;
+
+const TRIP_STATUS_LABELS = {
+    scheduled: "Scheduled",
+    departed: "Departed",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    active: "Old trip"
+};
+const BOOKING_STATUS_LABELS = {
+    reserved: "Reserved (not paid)",
+    booked: "Paid",
+    cancelled: "Cancelled",
+    refund_due: "Refund due",
+    refunded: "Refunded"
+};
+
+function placeName(key) {
+    return CAMPUS_LABELS[key] || (key ? key.charAt(0).toUpperCase() + key.slice(1) : "?");
+}
+
+function addDaysTo(dateString, days) {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+}
+
+function formatDay(dateString) {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    return date.toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+}
+
+// Runs an admin API call; returns null (after signing out) if the session has ended.
+async function adminRequest(path, options) {
+    const result = await DaystarApi.request(path, options);
+    if (result.status === 401) {
+        closeTripModal();
+        closeCancelModal();
+        handleSessionEnded();
+        return null;
     }
+    return result;
 }
 
-async function renderBusList(campus, container) {
-    container.innerHTML = "";
-    let buses = busesData[campus];
-    const savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
-
-    try {
-        const result = await DaystarApi.request("/api/admin/bookings");
-        if (result.status === 401) {
-            handleSessionEnded();
-            return;
-        }
-        const bookings = result.ok ? result.data : [];
-        const bookingSummary = document.createElement('div');
-        bookingSummary.className = 'bus-card';
-        bookingSummary.innerHTML = `
-            <h3>Bookings</h3>
-            <p><strong>Active records:</strong> ${bookings.length}</p>
-            <p>Use the trip form below to create a new trip for a selected bus.</p>
-        `;
-        container.appendChild(bookingSummary);
-    } catch (error) {
-        console.error('Failed to load admin bookings', error);
+async function loadScheduleOptions() {
+    const result = await adminRequest("/api/admin/schedule-options");
+    if (!result) return false;
+    if (!result.ok) {
+        showMessage("scheduleErrorMsg", result.data?.error || "Could not load buses and routes.");
+        return false;
     }
-    
-    buses.forEach((bus, idx) => {
-        // Merge with saved data if it exists
-        const savedKey = `${campus}-${idx}`;
-        const saved = savedBuses[savedKey];
-        
-        const displayBus = saved ? { ...bus, ...saved } : bus;
-        const statusClass = displayBus.status === "available" ? "status-available" : "status-departed";
-        const timeDisplay = displayBus.scheduledTime 
-            ? `Leaving at ${convertTo12h(displayBus.scheduledTime)}`
-            : displayBus.time;
-
-        const card = document.createElement("div");
-        card.className = "bus-card";
-
-        card.innerHTML = `
-            <h3>${displayBus.plate}</h3>
-            <div class="bus-info">
-                <p><strong>Type:</strong> ${displayBus.type.toUpperCase()} (${displayBus.seats} seats)</p>
-                <p><strong>Destination:</strong> ${displayBus.destination}</p>
-                <p><strong>Time:</strong> ${timeDisplay}</p>
-                <p><strong>Status:</strong></p>
-                <span class="bus-status ${statusClass}">${displayBus.status.toUpperCase()}</span>
-            </div>
-            <div class="bus-actions">
-                <button class="bus-btn btn-toggle" onclick="openScheduleModal('${campus}', ${idx})">
-                    Schedule Bus
-                </button>
-            </div>
-        `;
-
-        container.appendChild(card);
-    });
-}
-
-function openScheduleModal(campus, busIdx) {
-    currentAdmin = campus;
-    editingBusIdx = busIdx;
-    
-    const busPlate = busesData[campus][busIdx].plate;
-    document.getElementById("scheduleBusPlate").value = busPlate;
-    document.getElementById("scheduleDay").value = "";
-    document.getElementById("scheduleTime").innerHTML = '<option value="">-- Choose Time --</option>';
-    document.getElementById("scheduleStatus").value = "available";
-    
-    document.getElementById("scheduleModal").style.display = "flex";
-}
-
-function closeScheduleModal() {
-    document.getElementById("scheduleModal").style.display = "none";
-    editingBusIdx = null;
-}
-
-function updateScheduleTimes() {
-    const day = document.getElementById("scheduleDay").value;
-    const timeSelect = document.getElementById("scheduleTime");
-    
-    timeSelect.innerHTML = '<option value="">-- Choose Time --</option>';
-    
-    if (day && BUS_SCHEDULE[day] && BUS_SCHEDULE[day].length > 0) {
-        BUS_SCHEDULE[day].forEach(time => {
-            const option = document.createElement("option");
-            option.value = time;
-            option.text = convertTo12h(time);
-            timeSelect.appendChild(option);
-        });
-    } else {
-        timeSelect.innerHTML = '<option value="">No buses scheduled this day</option>';
+    scheduleOptions = result.data;
+    const dateInput = document.getElementById("scheduleDate");
+    if (!dateInput.value) {
+        // Admins plan the day before, so open on tomorrow.
+        dateInput.value = addDaysTo(scheduleOptions.today, 1);
     }
+    return true;
 }
 
-async function saveSchedule() {
-    const day = document.getElementById("scheduleDay").value;
-    const time = document.getElementById("scheduleTime").value;
-    const status = document.getElementById("scheduleStatus").value;
-    
-    if (!day || !time) {
-        alert("Please select a day and time.");
+async function loadSchedule() {
+    showMessage("scheduleErrorMsg", "");
+    if (!scheduleOptions && !(await loadScheduleOptions())) return;
+
+    const date = document.getElementById("scheduleDate").value;
+    if (!date) return;
+    document.getElementById("scheduleHeading").textContent =
+        `🗓️ Departures from ${placeName(currentAdmin)} – ${formatDay(date)}`;
+
+    const query = new URLSearchParams({ date, campus: currentAdmin });
+    const result = await adminRequest(`/api/admin/trips?${query}`);
+    if (!result) return;
+    if (!result.ok) {
+        showMessage("scheduleErrorMsg", result.data?.error || "Could not load the schedule.");
         return;
     }
+    scheduleTrips = result.data.trips;
+    renderTripTable();
+}
 
-    const busPlate = document.getElementById("scheduleBusPlate").value;
-    const bus = busesData[currentAdmin].find(item => item.plate === busPlate);
-    const payload = {
-        bus_id: bus ? bus.plate : busPlate,
-        route: currentAdmin === 'athi' ? 'athi-nairobi' : 'nairobi-athi',
-        departure_time: time,
-        trip_date: day,
-        status: status === 'departed' ? 'departed' : 'active'
-    };
+function renderTripTable() {
+    const tbody = document.getElementById("tripTableBody");
+    document.getElementById("noTripsNote").classList.toggle("hidden", scheduleTrips.length > 0);
 
+    tbody.innerHTML = scheduleTrips.map(trip => {
+        const route = trip.route ? `${placeName(trip.route.from)} → ${placeName(trip.route.to)}` : "-";
+        const canChange = trip.status === "scheduled" && !trip.has_left;
+        const statusLabel = trip.status === "scheduled" && trip.has_left ? "Left" : (TRIP_STATUS_LABELS[trip.status] || trip.status);
+        const actions = canChange
+            ? `<button class="bus-btn btn-toggle btn-small" onclick="openTripModal('${escapeHtml(trip.id)}')">Edit</button>
+               <button class="bus-btn btn-danger btn-small" onclick="openCancelModal('${escapeHtml(trip.id)}')">Cancel</button>`
+            : (trip.status === "cancelled"
+                ? `<button class="bus-btn btn-secondary btn-small" onclick="openCancelModal('${escapeHtml(trip.id)}')">Bookings</button>`
+                : "");
+        return `
+            <tr class="${trip.status === "cancelled" ? "row-cancelled" : ""}">
+                <td><strong>${escapeHtml(convertTo12h(trip.departure_time))}</strong></td>
+                <td>${escapeHtml(route)}</td>
+                <td>${escapeHtml(trip.bus?.plate || "-")}</td>
+                <td>${trip.driver ? escapeHtml(trip.driver.name) : '<span class="muted">Not assigned</span>'}</td>
+                <td>${trip.seats_taken} / ${trip.capacity}</td>
+                <td><span class="trip-status trip-status-${escapeHtml(trip.status)}">${escapeHtml(statusLabel)}</span></td>
+                <td class="trip-actions">${actions}</td>
+            </tr>`;
+    }).join("");
+}
+
+function fillSelect(select, options, selectedValue) {
+    select.innerHTML = options.map(option =>
+        `<option value="${escapeHtml(option.value)}"${option.value === selectedValue ? " selected" : ""}>${escapeHtml(option.label)}</option>`
+    ).join("");
+}
+
+function openTripModal(tripId) {
+    if (!scheduleOptions) return;
+    const trip = tripId ? scheduleTrips.find(item => item.id === tripId) : null;
+    editingTripId = trip ? trip.id : null;
+    const date = document.getElementById("scheduleDate").value;
+
+    document.getElementById("tripModalTitle").textContent = trip ? "Edit trip" : "Add trip";
+    document.getElementById("tripModalDate").textContent = `${formatDay(date)}, leaving ${placeName(currentAdmin)}`;
+    showMessage("tripErrorMsg", "");
+
+    const routes = scheduleOptions.routes.filter(route => route.from === currentAdmin);
+    const routeSelect = document.getElementById("tripRoute");
+    if (trip) {
+        fillSelect(routeSelect, [{ value: trip.route?.id || "", label: `${placeName(trip.route?.from)} → ${placeName(trip.route?.to)}` }], trip.route?.id);
+    } else if (routes.length === 0) {
+        fillSelect(routeSelect, [{ value: "", label: "No bookable routes leave this campus" }], "");
+    } else {
+        fillSelect(routeSelect, routes.map(route => ({ value: route.id, label: `${placeName(route.from)} → ${placeName(route.to)}` })), routes[0].id);
+    }
+    routeSelect.disabled = Boolean(trip);
+
+    document.getElementById("tripTime").value = trip ? trip.departure_time : "";
+
+    const busSelect = document.getElementById("tripBus");
+    fillSelect(busSelect, [{ value: "", label: "-- Choose a bus --" }].concat(
+        scheduleOptions.buses.map(bus => ({ value: bus.id, label: `${bus.plate} (${bus.capacity} seats)` }))
+    ), trip?.bus?.id || "");
+    const busLocked = Boolean(trip && trip.seats_taken > 0);
+    busSelect.disabled = busLocked;
+    document.getElementById("tripBusNote").classList.toggle("hidden", !busLocked);
+
+    // Drivers from this campus first, then the rest.
+    const drivers = [...scheduleOptions.drivers].sort((a, b) =>
+        (a.campus === currentAdmin ? 0 : 1) - (b.campus === currentAdmin ? 0 : 1) || a.name.localeCompare(b.name));
+    fillSelect(document.getElementById("tripDriver"), [{ value: "", label: "Not assigned yet" }].concat(
+        drivers.map(driver => ({ value: driver.id, label: driver.campus ? `${driver.name} (${placeName(driver.campus)})` : driver.name }))
+    ), trip?.driver?.id || "");
+
+    document.getElementById("tripModal").classList.remove("hidden");
+}
+
+function closeTripModal() {
+    document.getElementById("tripModal").classList.add("hidden");
+    editingTripId = null;
+}
+
+async function saveTrip() {
+    showMessage("tripErrorMsg", "");
+    const routeId = document.getElementById("tripRoute").value;
+    const time = document.getElementById("tripTime").value;
+    const busId = document.getElementById("tripBus").value;
+    const driverId = document.getElementById("tripDriver").value;
+
+    if (!routeId) return showMessage("tripErrorMsg", "Choose a route.");
+    if (!time) return showMessage("tripErrorMsg", "Enter the departure time.");
+    if (!busId) return showMessage("tripErrorMsg", "Choose a bus.");
+
+    const button = document.getElementById("tripSaveBtn");
+    button.disabled = true;
     try {
-        const result = await DaystarApi.request("/api/admin/trips", { method: "POST", body: payload });
-        if (result.status === 401) {
-            closeScheduleModal();
-            handleSessionEnded();
-            return;
-        }
+        const result = editingTripId
+            ? await adminRequest(`/api/admin/trips/${encodeURIComponent(editingTripId)}`, {
+                method: "PATCH",
+                body: { departure_time: time, bus_id: busId, driver_id: driverId || null }
+            })
+            : await adminRequest("/api/admin/trips", {
+                method: "POST",
+                body: {
+                    route_id: routeId,
+                    bus_id: busId,
+                    driver_id: driverId || null,
+                    trip_date: document.getElementById("scheduleDate").value,
+                    departure_time: time
+                }
+            });
+        if (!result) return;
         if (!result.ok) {
-            throw new Error(result.data?.error || 'Failed to save trip');
+            showMessage("tripErrorMsg", result.data?.error || "Could not save the trip.");
+            return;
         }
+        closeTripModal();
+        loadSchedule();
     } catch (error) {
-        console.error('Trip save failed', error);
-        alert(error.message);
-        return;
+        showMessage("tripErrorMsg", "Network error. Please try again.");
+    } finally {
+        button.disabled = false;
     }
-    
-    let savedBuses = JSON.parse(localStorage.getItem("busSchedules")) || {};
-    
-    const saveKey = `${currentAdmin}-${editingBusIdx}`;
-    savedBuses[saveKey] = {
-        scheduledTime: time,
-        status: status,
-        day: day
-    };
-    
-    localStorage.setItem("busSchedules", JSON.stringify(savedBuses));
-    
-    const container = currentAdmin === "athi" ? document.getElementById("athiBuses") : document.getElementById("nairoiBuses");
-    renderBusList(currentAdmin, container);
-    
-    closeScheduleModal();
-    alert(`Bus scheduled successfully for ${convertTo12h(time)} on ${day.charAt(0).toUpperCase() + day.slice(1)}!`);
 }
 
-function toggleBusStatus(campus, busIdx) {
-    const bus = busesData[campus][busIdx];
-    bus.status = bus.status === "available" ? "departed" : "available";
+async function copyPreviousDay() {
+    const toDate = document.getElementById("scheduleDate").value;
+    if (!toDate) return;
+    const fromDate = addDaysTo(toDate, -1);
+    if (!confirm(`Copy all ${placeName(currentAdmin)} departures from ${formatDay(fromDate)} to ${formatDay(toDate)}?`)) return;
 
-    // Re-render the bus list
-    const container = campus === "athi" ? document.getElementById("athiBuses") : document.getElementById("nairoiBuses");
-    renderBusList(campus, container);
+    showMessage("scheduleInfoMsg", "");
+    showMessage("scheduleErrorMsg", "");
+    const button = document.getElementById("copyDayBtn");
+    button.disabled = true;
+    try {
+        const result = await adminRequest("/api/admin/trips/copy", {
+            method: "POST",
+            body: { from_date: fromDate, to_date: toDate, campus: currentAdmin }
+        });
+        if (!result) return;
+        if (!result.ok) {
+            showMessage("scheduleErrorMsg", result.data?.error || "Could not copy the schedule.");
+            return;
+        }
+        const { created, skipped, source_count } = result.data;
+        if (source_count === 0) {
+            showMessage("scheduleInfoMsg", `There were no departures on ${formatDay(fromDate)} to copy.`);
+        } else {
+            const skippedText = skipped.length
+                ? ` Not copied: ${skipped.map(item => `${item.label} (${item.reason})`).join("; ")}`
+                : "";
+            showMessage("scheduleInfoMsg", `Copied ${created.length} of ${source_count} trips.${skippedText}`);
+        }
+        loadSchedule();
+    } catch (error) {
+        showMessage("scheduleErrorMsg", "Network error. Please try again.");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+function renderBookingList(bookings) {
+    if (bookings.length === 0) return '<p class="section-note">No students have booked this trip.</p>';
+    return `
+        <div class="table-scroll">
+            <table class="staff-table">
+                <thead><tr><th>Passenger</th><th>Phone</th><th>Seats</th><th>Paid with</th><th>Status</th></tr></thead>
+                <tbody>${bookings.map(booking => `
+                    <tr>
+                        <td>${escapeHtml(booking.passenger_name || "-")}</td>
+                        <td>${escapeHtml(booking.phone_number || "-")}</td>
+                        <td>${escapeHtml(booking.seats)}</td>
+                        <td>${booking.payment_method === "pass" ? "Bus pass" : `M-Pesa (KES ${escapeHtml(booking.total_amount)})`}</td>
+                        <td>${escapeHtml(BOOKING_STATUS_LABELS[booking.status] || booking.status)}</td>
+                    </tr>`).join("")}
+                </tbody>
+            </table>
+        </div>`;
+}
+
+async function openCancelModal(tripId) {
+    const trip = scheduleTrips.find(item => item.id === tripId);
+    if (!trip) return;
+    cancellingTripId = trip.status === "cancelled" ? null : trip.id;
+
+    const route = trip.route ? `${placeName(trip.route.from)} → ${placeName(trip.route.to)}` : "";
+    document.getElementById("cancelModal").querySelector("h2").textContent =
+        trip.status === "cancelled" ? "Cancelled trip" : "Cancel this trip?";
+    document.getElementById("cancelTripSummary").textContent =
+        `${convertTo12h(trip.departure_time)} ${route}, bus ${trip.bus?.plate || "-"}, ${formatDay(trip.trip_date)}.`;
+    document.getElementById("cancelAffected").innerHTML = '<p class="section-note">Loading bookings…</p>';
+    document.getElementById("cancelConfirmBtn").classList.toggle("hidden", !cancellingTripId);
+    document.getElementById("cancelCloseBtn").textContent = cancellingTripId ? "Keep trip" : "Close";
+    showMessage("cancelErrorMsg", "");
+    document.getElementById("cancelModal").classList.remove("hidden");
+
+    const result = await adminRequest(`/api/admin/trips/${encodeURIComponent(trip.id)}/bookings`);
+    if (!result) return;
+    if (!result.ok) {
+        showMessage("cancelErrorMsg", result.data?.error || "Could not load the bookings.");
+        return;
+    }
+    const active = result.data.filter(booking => ["reserved", "booked"].includes(booking.status));
+    const intro = cancellingTripId && active.length > 0
+        ? `<p class="section-note"><strong>${active.length} booking(s) will be cancelled.</strong> Paid M-Pesa bookings move to "Refunds due" for you to refund by hand. Please let these students know.</p>`
+        : "";
+    document.getElementById("cancelAffected").innerHTML = intro + renderBookingList(result.data);
+}
+
+function closeCancelModal() {
+    document.getElementById("cancelModal").classList.add("hidden");
+    cancellingTripId = null;
+}
+
+async function confirmCancelTrip() {
+    if (!cancellingTripId) return;
+    const button = document.getElementById("cancelConfirmBtn");
+    button.disabled = true;
+    showMessage("cancelErrorMsg", "");
+    try {
+        const result = await adminRequest(`/api/admin/trips/${encodeURIComponent(cancellingTripId)}/cancel`, { method: "POST" });
+        if (!result) return;
+        if (!result.ok) {
+            showMessage("cancelErrorMsg", result.data?.error || "Could not cancel the trip.");
+            return;
+        }
+        cancellingTripId = null;
+        document.getElementById("cancelModal").querySelector("h2").textContent = "Trip cancelled";
+        document.getElementById("cancelConfirmBtn").classList.add("hidden");
+        document.getElementById("cancelCloseBtn").textContent = "Close";
+        document.getElementById("cancelAffected").innerHTML = renderBookingList(result.data.affected);
+        loadSchedule();
+        loadRefunds();
+    } catch (error) {
+        showMessage("cancelErrorMsg", "Network error. Please try again.");
+    } finally {
+        button.disabled = false;
+    }
+}
+
+// ---------- Refunds due ----------
+
+async function loadRefunds() {
+    const result = await adminRequest("/api/admin/refunds");
+    if (!result) return;
+    const section = document.getElementById("refundSection");
+    if (!result.ok) {
+        section.classList.remove("hidden");
+        showMessage("refundErrorMsg", result.data?.error || "Could not load refunds.");
+        return;
+    }
+    showMessage("refundErrorMsg", "");
+    section.classList.toggle("hidden", result.data.length === 0);
+    document.getElementById("refundTableBody").innerHTML = result.data.map(booking => `
+        <tr>
+            <td>${booking.trip_date ? `${escapeHtml(formatDay(booking.trip_date))}, ${escapeHtml(convertTo12h(booking.departure_time))}` : "-"}</td>
+            <td>${escapeHtml(booking.passenger_name || "-")}</td>
+            <td>${escapeHtml(booking.phone_number || "-")}</td>
+            <td>KES ${escapeHtml(booking.total_amount)}</td>
+            <td>${escapeHtml(booking.mpesa_receipt_number || "-")}</td>
+            <td><button class="bus-btn btn-toggle btn-small" onclick="markRefunded('${escapeHtml(booking.booking_id)}')">Mark refunded</button></td>
+        </tr>`).join("");
+}
+
+async function markRefunded(bookingId) {
+    if (!confirm("Mark this booking as refunded? Only do this after you have sent the money back in M-Pesa.")) return;
+    const result = await adminRequest(`/api/admin/bookings/${encodeURIComponent(bookingId)}/refunded`, { method: "POST" });
+    if (!result) return;
+    if (!result.ok) {
+        showMessage("refundErrorMsg", result.data?.error || "Could not update the booking.");
+        return;
+    }
+    loadRefunds();
 }
 
 // ---------- Staff accounts (super admin only) ----------
@@ -859,6 +1182,9 @@ async function createStaff() {
 
     ["newStaffName", "newStaffEmail", "newStaffPhone"].forEach(id => { document.getElementById(id).value = ""; });
     loadStaffList();
+    // A new driver should appear in the trip form straight away.
+    scheduleOptions = null;
+    loadSchedule();
 }
 
 async function setStaffActive(staffId, active) {
@@ -872,6 +1198,8 @@ async function setStaffActive(staffId, active) {
         return;
     }
     loadStaffList();
+    scheduleOptions = null;
+    loadSchedule();
 }
 
 async function adminLogout() {

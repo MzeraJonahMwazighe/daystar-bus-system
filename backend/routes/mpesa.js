@@ -215,7 +215,22 @@ router.post('/callback', async (req, res) => {
         }
       );
 
-      await confirmBookingPayment(booking.booking_id);
+      try {
+        await confirmBookingPayment(booking.booking_id);
+      } catch (confirmError) {
+        // The money was taken but the seats couldn't be confirmed: the reservation expired
+        // before the payment arrived, or an admin cancelled the trip. Flag it so an admin
+        // refunds it by hand (it shows in the admin page's refund list).
+        const flagged = await Booking.updateOne(
+          { _id: booking._id, status: { $in: ['reserved', 'expired', 'cancelled'] } },
+          { $set: { status: 'refund_due' } }
+        );
+        console.error('M-Pesa payment received but booking not confirmed:', {
+          bookingId: booking.booking_id,
+          reason: confirmError.message,
+          markedRefundDue: flagged.modifiedCount > 0
+        });
+      }
     } else {
       console.warn('M-Pesa payment failed:', {
         checkoutRequestId,

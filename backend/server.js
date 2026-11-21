@@ -144,6 +144,7 @@ app.use(express.static(PUBLIC_DIR));
 // Routes
 app.use('/api/buses', require('./routes/buses'));
 app.use('/api/routes', require('./routes/routes'));
+app.use('/api/trips', require('./routes/trips'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/mpesa', require('./routes/mpesa'));

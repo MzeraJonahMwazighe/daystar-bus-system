@@ -105,6 +105,15 @@ function renderPass(student){
     document.getElementById("buyPassBtn").style.display = "block"
 }
 
+const STATUS_LABELS = {
+    reserved: "reserved",
+    booked: "booked",
+    expired: "expired",
+    cancelled: "trip cancelled",
+    refund_due: "trip cancelled, refund due",
+    refunded: "refunded"
+}
+
 function renderBookings(bookings){
     const list = document.getElementById("bookingList")
     if (!bookings.length){
@@ -114,6 +123,7 @@ function renderBookings(bookings){
 
     list.innerHTML = bookings.map(booking => {
         const status = escapeHtml(booking.status)
+        const statusLabel = escapeHtml(STATUS_LABELS[booking.status] || booking.status)
         const paidWith = booking.payment_method === "pass" ? "Bus pass" : `KES ${escapeHtml(booking.total_amount)}`
         const when = booking.trip_date && booking.departure_time
             ? `${escapeHtml(booking.trip_date)} at ${escapeHtml(booking.departure_time)}`
@@ -121,7 +131,7 @@ function renderBookings(bookings){
         return `
             <div class="booking-item">
                 <strong>${escapeHtml(booking.boardingStop)} → ${escapeHtml(booking.alightingStop)}</strong>
-                <span class="badge ${status}">${status}</span><br>
+                <span class="badge ${status}">${statusLabel}</span><br>
                 Bus ${escapeHtml(booking.bus_id || "-")} · Seat ${escapeHtml(booking.seats)} · ${paidWith}<br>
                 <span style="color:#9fb3c9;">${when} · ${escapeHtml(booking.booking_id)}</span>
             </div>`

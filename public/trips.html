@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Select Your Bus & Seat</title>
+<title>Choose Your Trip & Seat</title>
 
 <style>
 
@@ -94,6 +94,31 @@ header p{
 .arrow{
     font-size:28px;
     color:#22c1c3;
+}
+
+.trip-group-title{
+    grid-column:1 / -1;
+    margin:10px 0 -5px;
+    color:#22c1c3;
+    font-size:20px;
+}
+
+.trip-time{
+    font-size:24px;
+    font-weight:bold;
+}
+
+.trip-empty{
+    text-align:center;
+    padding:40px;
+    font-size:18px;
+    color:#b0bec5;
+}
+
+@media (max-width: 700px){
+    .bus-grid{
+        grid-template-columns:1fr;
+    }
 }
 
 /* MODAL STYLES */
@@ -463,20 +488,23 @@ header p{
 <body>
 
 <header>
-<h1>Select Your Bus</h1>
-<p>Choose from available buses for your journey</p>
+<h1>Choose Your Trip</h1>
+<p>Departures for today and tomorrow. Booking closes when the bus leaves.</p>
 </header>
 
 <div class="container">
 
 <!-- BUS LIST -->
 <div id="busListLoading" style="text-align: center; padding: 40px; font-size: 18px; color: #b0bec5;">
-    Loading buses...
+    Loading trips...
 </div>
 <div id="busListError" style="display: none; text-align: center; padding: 40px; font-size: 18px; color: #e74c3c;">
-    Failed to load buses. Please refresh the page.
+    Failed to load trips. Please refresh the page.
 </div>
 <div class="bus-grid" id="busList"></div>
+<div class="trip-empty" id="noTrips" style="display: none;">
+    No trips are open for booking yet. Campus admins usually post the next day's departures the evening before, so please check back later.
+</div>
 
 <!-- MODAL FOR BUS DETAILS -->
 <div class="modal-overlay" id="busModal">
@@ -485,11 +513,11 @@ header p{
         
         <div class="modal-info">
             <p>
-                <strong>Status:</strong>
+                <strong>Bus:</strong>
                 <span id="modalBusStatus"></span>
             </p>
             <p>
-                <strong>Time:</strong>
+                <strong>Departs:</strong>
                 <span id="modalBusTime"></span>
             </p>
             <p>
@@ -600,21 +628,26 @@ header p{
 <script src="js/api.js"></script>
 <script>
 
-// ========== BUS CONFIGURATION ==========
-const busLayouts = {
-    // NEW BUSES (45 seats): 2 left + aisle + 3 right
-    "KDA347R": { capacity: 45, type: "new" },
-    "KDC234K": { capacity: 45, type: "new" },
-    "KDE456K": { capacity: 45, type: "new" },
-    "KCY564K": { capacity: 45, type: "new" },
-    // OLD BUSES (29 seats): 2 left + aisle + 2 right
-    "KCU978S": { capacity: 29, type: "old" },
-    "KBX319D": { capacity: 29, type: "old" },
-    "KBX514D": { capacity: 29, type: "old" },
-    "KCU453E": { capacity: 29, type: "old" }
-};
+let trips = [];       // bookable trips from /api/trips
+let tripDates = [];   // [today, tomorrow] as YYYY-MM-DD (Nairobi)
 
-let buses = [];
+const PLACE_LABELS = { athi: "Athi River", nairobi: "Nairobi", syokimau: "Syokimau" };
+
+function placeName(key) {
+    return PLACE_LABELS[key] || key || "?";
+}
+
+function routeLabel(trip) {
+    return `${placeName(trip.from)} → ${placeName(trip.to)}`;
+}
+
+function dayLabel(dateString) {
+    const date = new Date(`${dateString}T00:00:00Z`);
+    const pretty = date.toLocaleDateString("en-KE", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+    if (dateString === tripDates[0]) return `Today, ${pretty}`;
+    if (dateString === tripDates[1]) return `Tomorrow, ${pretty}`;
+    return pretty;
+}
 
 function convertTo12h(time24) {
     const [hours, minutes] = time24.split(":");
@@ -625,78 +658,87 @@ function convertTo12h(time24) {
 }
 
 let routeFarePerSeat = null;
-let selectedBus = null;
+let selectedBus = null;   // the chosen trip (plate, time, route, seats, stops)
 let selectedSeats = [];
 let farePreviewRequestId = 0;
 
-// ========== RENDER BUS LIST ==========
+// ========== RENDER TRIP LIST ==========
 function renderBusList() {
     const container = document.getElementById("busList");
     container.innerHTML = "";
+    document.getElementById("noTrips").style.display = trips.length === 0 ? "block" : "none";
 
-    buses.forEach(bus => {
+    // Group by day, then by where the bus leaves from, then by time.
+    const ordered = [...trips].sort((a, b) =>
+        a.trip_date.localeCompare(b.trip_date) ||
+        placeName(a.from).localeCompare(placeName(b.from)) ||
+        String(a.departs_at).localeCompare(String(b.departs_at)));
+
+    let currentGroup = null;
+    ordered.forEach(trip => {
+        const group = `${dayLabel(trip.trip_date)} · From ${placeName(trip.from)}`;
+        if (group !== currentGroup) {
+            currentGroup = group;
+            const heading = document.createElement("h2");
+            heading.className = "trip-group-title";
+            heading.innerText = group;
+            container.appendChild(heading);
+        }
+
+        const isFull = trip.seats_left <= 0;
         const card = document.createElement("div");
         card.className = "bus-card";
-
-        // Calculate available seats - count reserved and booked status
-        const bookedSeats = bus.bookedSeats || [];
-        const bookedCount = bookedSeats.length;
-        const capacity = bus.capacity || 45;
-        const availableSeats = capacity - bookedCount;
-
-        const isFull = availableSeats <= 0;
-        const statusClass = isFull ? "departed" : "available";
-        const statusText = isFull ? "FULL" : `Available Seats: ${availableSeats}`;
-
         card.innerHTML = `
             <div class="bus-info">
-                <div class="bus-plate">${bus.plate}</div>
-                <div class="${statusClass}">
-                    ${statusText}
-                </div>
-                <div class="time">${bus.type}</div>
+                <div class="trip-time"></div>
+                <div class="time route"></div>
+                <div class="time plate"></div>
+                <div class="${isFull ? "departed" : "available"}">${isFull ? "FULL" : `Seats left: ${trip.seats_left}`}</div>
             </div>
             <div class="arrow">➜</div>
         `;
+        card.querySelector(".trip-time").innerText = convertTo12h(trip.departure_time);
+        card.querySelector(".route").innerText = routeLabel(trip);
+        card.querySelector(".plate").innerText = `Bus ${trip.bus_plate || "-"}`;
 
-        // Disable clicking if full
         if (isFull) {
             card.style.opacity = "0.6";
             card.style.cursor = "not-allowed";
             card.onclick = (e) => {
                 e.preventDefault();
-                alert("This bus is fully booked. Please select another bus.");
+                alert("This trip is fully booked. Please choose another trip.");
             };
         } else {
-            card.onclick = () => selectBus(bus);
+            card.onclick = () => selectBus(trip);
         }
 
         container.appendChild(card);
     });
 }
 
-// ========== BUS & MODAL HANDLING ==========
-function selectBus(bus) {
-    const bookedSeats = bus.bookedSeats || [];
-    const bookedCount = bookedSeats.length;
-    const capacity = bus.capacity || 45;
-    const availableSeats = capacity - bookedCount;
-
-    if (availableSeats <= 0) {
-        alert("This bus is fully booked. Please select another bus.");
+// ========== TRIP & MODAL HANDLING ==========
+function selectBus(trip) {
+    if (trip.seats_left <= 0) {
+        alert("This trip is fully booked. Please choose another trip.");
         return;
     }
 
-    selectedBus = bus;
+    selectedBus = {
+        ...trip,
+        plate: trip.bus_plate,
+        route: `${routeLabel(trip)}, ${convertTo12h(trip.departure_time)}`,
+        bookedSeats: [],
+        stops: []
+    };
     selectedSeats = [];
 
-    // Save selected bus plate to localStorage
-    localStorage.setItem("selectedBusPlate", bus.plate);
+    // The payment and ticket pages show the bus plate from here.
+    localStorage.setItem("selectedBusPlate", trip.bus_plate || "");
 
-    document.getElementById("modalBusPlate").innerText = bus.plate;
-    document.getElementById("modalBusStatus").innerText = `Available Seats: ${availableSeats}`;
-    document.getElementById("modalBusTime").innerText = `Bus Type: ${bus.type}`;
-    document.getElementById("modalDestination").innerText = bus.route || "Route unavailable";
+    document.getElementById("modalBusPlate").innerText = routeLabel(trip);
+    document.getElementById("modalBusStatus").innerText = `${trip.bus_plate} · ${trip.seats_left} seats left`;
+    document.getElementById("modalBusTime").innerText = `${convertTo12h(trip.departure_time)}, ${dayLabel(trip.trip_date)}`;
+    document.getElementById("modalDestination").innerText = routeLabel(trip);
 
     document.getElementById("busModal").classList.add("active");
 }
@@ -710,8 +752,14 @@ function viewSeats() {
     if (!selectedBus) return;
 
     // Refresh seat status from API before showing
-    refreshSeatStatus().then(() => {
+    refreshSeatStatus().then((stillBookable) => {
+        if (!stillBookable) {
+            closeModal();
+            loadBusesFromAPI();
+            return;
+        }
         document.getElementById("busList").style.display = "none";
+        document.getElementById("noTrips").style.display = "none";
         document.getElementById("busModal").classList.remove("active");
         document.getElementById("seatMapContainer").classList.add("active");
         renderSeatMap();
@@ -719,23 +767,28 @@ function viewSeats() {
     });
 }
 
-// Refresh seat status from API
+// Refresh seat status from API. Returns false if the trip can't be booked any more.
 async function refreshSeatStatus() {
     try {
-        const response = await fetch(`${API_BASE}/api/buses/${selectedBus.plate}`);
+        const response = await fetch(`${API_BASE}/api/trips/${encodeURIComponent(selectedBus.id)}`);
         if (!response.ok) {
             console.error("Failed to refresh seat status");
-            return;
+            return true;
         }
 
-        const busData = await response.json();
-        // Update the selected bus with fresh seat data
-        selectedBus.bookedSeats = busData.bookedSeats || [];
-        selectedBus.routeId = busData.routeId || selectedBus.routeId;
-        selectedBus.stops = busData.stops || selectedBus.stops || [];
+        const tripData = await response.json();
+        if (!tripData.bookable) {
+            alert("This trip can no longer be booked. It may have left or been cancelled.");
+            return false;
+        }
+        selectedBus.bookedSeats = tripData.bookedSeats || [];
+        selectedBus.routeId = tripData.routeId || selectedBus.routeId;
+        selectedBus.stops = tripData.stops || [];
+        selectedBus.capacity = tripData.capacity || selectedBus.capacity;
     } catch (error) {
         console.error("Error refreshing seat status:", error);
     }
+    return true;
 }
 
 function backToBusList() {
@@ -744,6 +797,7 @@ function backToBusList() {
     selectedSeats = [];
     routeFarePerSeat = null;
     selectedBus = null;
+    loadBusesFromAPI();
 }
 
 function getSortedStops() {
@@ -830,7 +884,7 @@ async function requestFarePreview() {
 
 // ========== SEAT MAP RENDERING ==========
 function renderSeatMap() {
-    document.getElementById("seatMapBusTitle").innerText = `Bus: ${selectedBus.plate}`;
+    document.getElementById("seatMapBusTitle").innerText = `Bus: ${selectedBus.plate} · ${dayLabel(selectedBus.trip_date)}`;
     document.getElementById("seatMapDestination").innerText = `Route: ${selectedBus.route || "Unavailable"}`;
     
     // Update booking summary panel
@@ -843,16 +897,10 @@ function renderSeatMap() {
 
     let seatNum = 1;
     
-    // Get bus configuration from busLayouts
-    const busConfig = busLayouts[selectedBus.plate];
-    if (!busConfig) {
-        console.error("Bus configuration not found for plate:", selectedBus.plate);
-        return;
-    }
-    
-    const capacity = busConfig.capacity;
-    const busType = busConfig.type;
-    
+    // 45-seat buses are 2 + aisle + 3, 29-seat buses 2 + aisle + 2; anything else uses a plain layout.
+    const capacity = Number(selectedBus.capacity) || 0;
+    const busType = capacity === 45 ? "new" : (capacity === 29 ? "old" : "other");
+
     if (busType === "new") {
         // NEW BUS: 45 seats
         // Layout: 2 left + aisle + 3 right = 5 seats per row
@@ -936,6 +984,30 @@ function renderSeatMap() {
             seatNum++;
         }
         seatGrid.appendChild(lastRowDiv);
+    } else {
+        // Any other bus size: rows of 2 + aisle + 2.
+        const rowsDiv = document.createElement("div");
+        rowsDiv.style.display = "inline-grid";
+        rowsDiv.style.gridTemplateColumns = "repeat(5, 1fr)";
+        rowsDiv.style.gap = "15px";
+        rowsDiv.style.width = "100%";
+        rowsDiv.style.justifyContent = "center";
+        while (seatNum <= capacity) {
+            for (let col = 0; col < 4; col++) {
+                if (col === 2) {
+                    const aisle = document.createElement("div");
+                    aisle.className = "aisle";
+                    rowsDiv.appendChild(aisle);
+                }
+                if (seatNum <= capacity) {
+                    rowsDiv.appendChild(createSeatElement(seatNum));
+                    seatNum++;
+                } else {
+                    rowsDiv.appendChild(document.createElement("div"));
+                }
+            }
+        }
+        seatGrid.appendChild(rowsDiv);
     }
 }
 
@@ -1017,10 +1089,8 @@ async function proceedToPayment() {
         return;
     }
 
-    const busPlate = localStorage.getItem("selectedBusPlate");
     const passengerName = localStorage.getItem("passengerName") || "";
     const phoneNumber = localStorage.getItem("phoneNumber") || "";
-    console.log("Bus plate:", busPlate);
 
     try {
         const response = await fetch(`${API_BASE}/api/bookings`, {
@@ -1029,7 +1099,7 @@ async function proceedToPayment() {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({
-                busPlate: busPlate,
+                tripId: selectedBus.id,
                 seats: selectedSeats,
                 boardingStop: document.getElementById("boardingStop").value,
                 alightingStop: document.getElementById("alightingStop").value,
@@ -1081,32 +1151,24 @@ async function loadBusesFromAPI() {
     const busListEl = document.getElementById("busList");
 
     try {
-        // Show loading state
         loadingEl.style.display = "block";
         errorEl.style.display = "none";
+        document.getElementById("noTrips").style.display = "none";
         busListEl.innerHTML = "";
 
-        const response = await fetch(`${API_BASE}/api/buses`);
-
+        const response = await fetch(`${API_BASE}/api/trips`);
         if (!response.ok) {
             throw new Error(`API error: ${response.status}`);
         }
 
         const data = await response.json();
+        trips = Array.isArray(data.trips) ? data.trips : [];
+        tripDates = Array.isArray(data.dates) ? data.dates : [];
 
-        // Populate buses array from API response
-        buses = Array.isArray(data) ? data : data.buses || [];
-
-        if (buses.length === 0) {
-            throw new Error("No buses available");
-        }
-
-        // Hide loading, show buses
         loadingEl.style.display = "none";
         renderBusList();
-
     } catch (error) {
-        console.error("Failed to load buses:", error);
+        console.error("Failed to load trips:", error);
         loadingEl.style.display = "none";
         errorEl.style.display = "block";
         busListEl.innerHTML = "";

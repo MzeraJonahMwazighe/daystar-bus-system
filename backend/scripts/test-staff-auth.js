@@ -30,6 +30,10 @@ const EMAILS = {
 };
 const ALL_TEST_EMAILS = Object.values(EMAILS);
 const TEST_BUS_PLATE = 'STAFF-TEST-01';
+
+// Phase 3: bookings need a scheduled trip leaving today or tomorrow (Nairobi time).
+const { addDays, departsAt, nairobiDateString } = require('../lib/tripSchedule');
+const TOMORROW = addDays(nairobiDateString(), 1);
 const created = { routeIds: [], busIds: [], tripIds: [], bookingIds: [] };
 
 const deliveredCodes = {};
@@ -135,7 +139,7 @@ async function main() {
   const testBus = await Bus.create({ plate: TEST_BUS_PLATE, capacity: 6, type: 'Test', route: 'Staff Auth Test' });
   created.busIds.push(testBus._id);
   const bookingTrip = await Trip.create({
-    bus: testBus._id, route: bookingRoute._id, trip_date: '2026-11-20', departure_time: '10:00', status: 'active',
+    bus: testBus._id, route: bookingRoute._id, trip_date: TOMORROW, departure_time: '10:00', departs_at: departsAt(TOMORROW, '10:00'), campus: 'test', status: 'scheduled',
     seats: Array.from({ length: 6 }, (_, index) => ({ seat_number: index + 1, status: 'available', booking_id: null, reserved_by: null, expires_at: null }))
   });
   created.tripIds.push(bookingTrip._id);
@@ -263,20 +267,24 @@ async function main() {
     assert.equal(athiCreateStaff.status, 403);
 
     // ---------- 7. Campus admins only schedule trips from their own campus ----------
-    const tripBody = (route) => ({ bus_id: TEST_BUS_PLATE, route, departure_time: '07:00', trip_date: '2026-11-20', status: 'staff-test-inactive' });
-    const otherCampusTrip = await request('/api/admin/trips', { method: 'POST', cookie: athiCookie, body: tripBody('nairobi-athi') });
+    // 30 days ahead, so these never show up as bookable trips on the live site.
+    const farDate = addDays(nairobiDateString(), 30);
+    const athiNairobi = await Route.findOne({ from_location: 'athi', to_location: 'nairobi' }).lean();
+    const nairobiAthi = await Route.findOne({ from_location: 'nairobi', to_location: 'athi' }).lean();
+    const tripBody = (route, time) => ({ bus_id: String(testBus._id), route_id: String(route._id), departure_time: time, trip_date: farDate });
+    const otherCampusTrip = await request('/api/admin/trips', { method: 'POST', cookie: athiCookie, body: tripBody(nairobiAthi, '07:00') });
     show('7a ATHI admin schedules nairobi->athi', otherCampusTrip);
     assert.equal(otherCampusTrip.status, 403);
-    const ownCampusTrip = await request('/api/admin/trips', { method: 'POST', cookie: athiCookie, body: tripBody('athi-nairobi') });
+    const ownCampusTrip = await request('/api/admin/trips', { method: 'POST', cookie: athiCookie, body: tripBody(athiNairobi, '07:00') });
     show('7b ATHI admin schedules athi->nairobi', ownCampusTrip);
-    assert.equal(ownCampusTrip.status, 200);
+    assert.equal(ownCampusTrip.status, 201);
     created.tripIds.push(ownCampusTrip.body.trip_id);
 
     // ---------- 8. Super admin ----------
     const superCookie = `staff_session=${signStaffSession({ staffId: String(superAdmin._id), email: superAdmin.email })}`;
-    const superTrip = await request('/api/admin/trips', { method: 'POST', cookie: superCookie, body: tripBody('nairobi-athi') });
+    const superTrip = await request('/api/admin/trips', { method: 'POST', cookie: superCookie, body: tripBody(nairobiAthi, '10:00') });
     show('8a SUPER ADMIN schedules nairobi->athi', superTrip);
-    assert.equal(superTrip.status, 200);
+    assert.equal(superTrip.status, 201);
     created.tripIds.push(superTrip.body.trip_id);
 
     const staffList = await request('/api/admin/staff', { cookie: superCookie });
@@ -362,7 +370,7 @@ async function main() {
     const prodBooking = await request('/api/bookings', {
       method: 'POST',
       headers: { 'x-fixed-booking-id': fixedId },
-      body: { busPlate: TEST_BUS_PLATE, seats: [1], boardingStop: 'Staff Test Start', alightingStop: 'Staff Test End', passengerName: 'Staff Test', phoneNumber: '0712999101' }
+      body: { tripId: String(bookingTrip._id), seats: [1], boardingStop: 'Staff Test Start', alightingStop: 'Staff Test End', passengerName: 'Staff Test', phoneNumber: '0712999101' }
     });
     process.env.NODE_ENV = 'test';
     if (prodBooking.body?.booking_id) created.bookingIds.push(prodBooking.body.booking_id);
@@ -373,7 +381,7 @@ async function main() {
     const testBooking = await request('/api/bookings', {
       method: 'POST',
       headers: { 'x-fixed-booking-id': fixedId },
-      body: { busPlate: TEST_BUS_PLATE, seats: [2], boardingStop: 'Staff Test Start', alightingStop: 'Staff Test End', passengerName: 'Staff Test', phoneNumber: '0712999102' }
+      body: { tripId: String(bookingTrip._id), seats: [2], boardingStop: 'Staff Test Start', alightingStop: 'Staff Test End', passengerName: 'Staff Test', phoneNumber: '0712999102' }
     });
     if (testBooking.body?.booking_id) created.bookingIds.push(testBooking.body.booking_id);
     show('13b NODE_ENV=test booking with x-fixed-booking-id header', testBooking);

@@ -24,6 +24,10 @@ const EMAILS = {
 };
 const ALL_TEST_EMAILS = Object.values(EMAILS);
 const TEST_BUS_PLATE = 'SIGNUP-TEST-01';
+
+// Phase 3: bookings need a scheduled trip leaving today or tomorrow (Nairobi time).
+const { addDays, departsAt, nairobiDateString } = require('../lib/tripSchedule');
+const TOMORROW = addDays(nairobiDateString(), 1);
 const TEST_PHONES = ['0712888101', '0712888102', '0712888103', '0712888104'];
 const created = { routeIds: [], busIds: [], tripIds: [], bookingIds: [] };
 
@@ -92,7 +96,7 @@ async function main() {
   const bus = await Bus.create({ plate: TEST_BUS_PLATE, capacity: 6, type: 'Test', route: 'Signup Test' });
   created.busIds.push(bus._id);
   const trip = await Trip.create({
-    bus: bus._id, route: route._id, trip_date: '2026-11-25', departure_time: '07:00', status: 'active',
+    bus: bus._id, route: route._id, trip_date: TOMORROW, departure_time: '07:00', departs_at: departsAt(TOMORROW, '07:00'), campus: 'test', status: 'scheduled',
     seats: Array.from({ length: 6 }, (_, index) => ({ seat_number: index + 1, status: 'available', booking_id: null, reserved_by: null, expires_at: null }))
   });
   created.tripIds.push(trip._id);
@@ -225,7 +229,7 @@ async function main() {
     assert.equal(badUpdate.status, 400);
 
     // ---------- 6. Booking history only shows your own bookings ----------
-    const bookingBody = (seat, phone) => ({ busPlate: TEST_BUS_PLATE, seats: [seat], boardingStop: 'Signup Test Start', alightingStop: 'Signup Test End', passengerName: 'Signup Test', phoneNumber: phone });
+    const bookingBody = (seat, phone) => ({ tripId: String(trip._id), seats: [seat], boardingStop: 'Signup Test Start', alightingStop: 'Signup Test End', passengerName: 'Signup Test', phoneNumber: phone });
     const ownBooking = await request('/api/bookings', { method: 'POST', cookie: newStudentCookie, body: bookingBody(1, TEST_PHONES[2]) });
     const guestBooking = await request('/api/bookings', { method: 'POST', body: bookingBody(2, TEST_PHONES[1]) });
     const otherCookie = `student_session=${signStudentSession({ studentId: String(existingStudent._id), email: existingStudent.email })}`;

@@ -1,9 +1,10 @@
 const express = require('express');
+const mongoose = require('mongoose');
 const router = express.Router();
 const { calculateZoneFare, generateTicketNumber, validatePhoneNumber } = require('../lib/bookingHelpers');
 const Booking = require('../models/Booking');
-const Bus = require('../models/Bus');
 const Trip = require('../models/Trip');
+const { isTripBookable } = require('../lib/tripSchedule');
 const { optionalStudentAuth } = require('../middleware/requireStudentAuth');
 const { requireStaff } = require('../middleware/requireStaffAuth');
 const { confirmBookingPayment } = require('../lib/paymentHelpers');
@@ -19,14 +20,32 @@ function serializeBooking(booking) {
     total_amount: booking.total_amount,
     status: booking.status,
     payment_method: booking.payment_method || 'mpesa',
+    trip_id: booking.trip?._id ? String(booking.trip._id) : (booking.trip ? String(booking.trip) : null),
+    trip_date: booking.trip?.trip_date || null,
+    departure_time: booking.trip?.departure_time || null,
     created_at: booking.createdAt || booking.created_at
   };
+}
+
+async function releaseSeats(tripId, bookingId) {
+  await Trip.updateOne(
+    { _id: tripId },
+    {
+      $set: {
+        'seats.$[elem].status': 'available',
+        'seats.$[elem].booking_id': null,
+        'seats.$[elem].reserved_by': null,
+        'seats.$[elem].expires_at': null
+      }
+    },
+    { arrayFilters: [{ 'elem.booking_id': bookingId, 'elem.status': 'reserved' }] }
+  );
 }
 
 // Listing every booking is an admin-only view.
 router.get('/', requireStaff('campus_admin'), async (req, res) => {
   try {
-    const bookings = await Booking.find({}).populate('bus').lean();
+    const bookings = await Booking.find({}).populate('bus').populate('trip', 'trip_date departure_time').lean();
     res.json(bookings.map(serializeBooking));
   } catch (error) {
     console.error(error);
@@ -35,10 +54,10 @@ router.get('/', requireStaff('campus_admin'), async (req, res) => {
 });
 
 router.post('/', optionalStudentAuth, async (req, res) => {
-  const { busPlate, seats, boardingStop, alightingStop, passengerName, phoneNumber } = req.body;
+  const { tripId, seats, boardingStop, alightingStop, passengerName, phoneNumber } = req.body;
 
-  if (!busPlate || !seats || !Array.isArray(seats) || seats.length === 0) {
-    return res.status(400).json({ error: 'Invalid booking data - busPlate, seats (array), boardingStop, and alightingStop required' });
+  if (!tripId || !mongoose.isValidObjectId(tripId) || !seats || !Array.isArray(seats) || seats.length === 0) {
+    return res.status(400).json({ error: 'Invalid booking data - tripId, seats (array), boardingStop, and alightingStop required' });
   }
 
   const normalizedBoardingStop = String(boardingStop || '').trim();
@@ -71,20 +90,17 @@ router.post('/', optionalStudentAuth, async (req, res) => {
   }
 
   try {
-    const bus = await Bus.findOne({ plate: busPlate }).lean();
-    if (!bus) {
-      return res.status(404).json({ error: 'Bus not found' });
-    }
-
-    if (uniqueSeatNumbers.some(seat => seat > bus.capacity)) {
-      return res.status(400).json({ error: 'One or more requested seats do not exist on this bus' });
-    }
-
-    const trip = await Trip.findOne({ bus: bus._id, status: 'active' })
-      .populate('route')
-      .sort({ createdAt: -1 });
+    const trip = await Trip.findById(tripId).populate('route').lean();
     if (!trip) {
-      return res.status(404).json({ error: 'No active trip found for this bus' });
+      return res.status(404).json({ error: 'Trip not found' });
+    }
+
+    if (!isTripBookable(trip)) {
+      return res.status(409).json({ error: 'This trip can no longer be booked. It may have left or been cancelled.' });
+    }
+
+    if (uniqueSeatNumbers.some(seat => seat > trip.seats.length)) {
+      return res.status(400).json({ error: 'One or more requested seats do not exist on this bus' });
     }
 
     let farePerSeat;
@@ -116,9 +132,13 @@ router.post('/', optionalStudentAuth, async (req, res) => {
     const expiresAt = new Date(Date.now() + 2 * 60 * 1000);
     const now = new Date();
 
+    // The status and departure checks are part of the same atomic update, so a seat can't be
+    // reserved on a trip that was cancelled or left a moment ago.
     const updatedTrip = await Trip.findOneAndUpdate(
       {
         _id: trip._id,
+        status: 'scheduled',
+        departs_at: { $gt: now },
         seats: {
           $not: {
             $elemMatch: {
@@ -177,21 +197,41 @@ router.post('/', optionalStudentAuth, async (req, res) => {
     const adjustedAmount = uniqueSeatNumbers.length * farePerSeat;
     const seatsString = uniqueSeatNumbers.join(',');
 
-    const booking = await Booking.create({
-      booking_id: bookingId,
-      bus: bus._id,
-      trip: trip._id,
-      seats: seatsString,
-      boardingStop: normalizedBoardingStop,
-      alightingStop: normalizedAlightingStop,
-      destination: normalizedAlightingStop,
-      total_amount: adjustedAmount,
-      student: student?._id || null,
-      passenger_name: passengerName,
-      phone_number: phoneNumber,
-      status: 'reserved',
-      payment_method: passCoversTrip ? 'pass' : 'mpesa'
-    });
+    let booking;
+    try {
+      booking = await Booking.create({
+        booking_id: bookingId,
+        bus: trip.bus,
+        trip: trip._id,
+        seats: seatsString,
+        boardingStop: normalizedBoardingStop,
+        alightingStop: normalizedAlightingStop,
+        destination: normalizedAlightingStop,
+        total_amount: adjustedAmount,
+        student: student?._id || null,
+        passenger_name: passengerName,
+        phone_number: phoneNumber,
+        status: 'reserved',
+        payment_method: passCoversTrip ? 'pass' : 'mpesa'
+      });
+    } catch (createError) {
+      // e.g. this phone already has a booking on this trip: give the seats straight back
+      // instead of leaving them held for 2 minutes. (A booking_id clash is skipped: the
+      // other booking with that ID owns those seat entries.)
+      if (!(createError.code === 11000 && createError.keyPattern?.booking_id)) {
+        await releaseSeats(trip._id, bookingId);
+      }
+      throw createError;
+    }
+
+    // If an admin cancelled the trip between our seat reservation and creating this booking,
+    // the cancellation didn't see this booking yet. Undo it here.
+    const tripNow = await Trip.findById(trip._id).select('status').lean();
+    if (tripNow?.status !== 'scheduled') {
+      await Booking.updateOne({ _id: booking._id, status: 'reserved' }, { $set: { status: 'cancelled' } });
+      await releaseSeats(trip._id, bookingId);
+      return res.status(409).json({ error: 'This trip was just cancelled. Please choose another trip.' });
+    }
 
     if (passCoversTrip) {
       const ticket = await confirmBookingPayment(booking.booking_id);
@@ -212,25 +252,27 @@ router.post('/', optionalStudentAuth, async (req, res) => {
       payment_method: 'mpesa'
     });
   } catch (error) {
-    console.error(error);
-
     // Handle duplicate key errors
     if (error.code === 11000 && error.keyPattern) {
       if (error.keyPattern.booking_id) {
         return res.status(409).json({ error: 'Booking ID conflict, please retry' });
       }
       if (error.keyPattern.phone_number) {
-        return res.status(409).json({ error: 'This phone number already has an active booking. Please complete or wait for your existing reservation to expire before booking again.' });
+        return res.status(409).json({ error: 'This phone number already has a booking on this trip. Please complete it or wait for the reservation to expire before booking again.' });
       }
     }
 
+    console.error(error);
     res.status(500).json({ error: 'Database error' });
   }
 });
 
 router.get('/:bookingId', async (req, res) => {
   try {
-    const booking = await Booking.findOne({ booking_id: req.params.bookingId }).populate('bus').lean();
+    const booking = await Booking.findOne({ booking_id: req.params.bookingId })
+      .populate('bus')
+      .populate('trip', 'trip_date departure_time')
+      .lean();
     if (!booking) {
       return res.status(404).json({ error: 'Booking not found' });
     }

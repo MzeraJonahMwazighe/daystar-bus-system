@@ -56,9 +56,12 @@ async function confirmBookingPayment(bookingId) {
       throw new Error('Booking has no valid seats');
     }
 
+    // A cancelled trip never confirms seats, even if the money arrives (the M-Pesa callback
+    // then marks the booking refund_due).
     const updatedTrip = await Trip.findOneAndUpdate(
       {
         _id: booking.trip,
+        status: { $ne: 'cancelled' },
         seats: {
           $not: {
             $elemMatch: {

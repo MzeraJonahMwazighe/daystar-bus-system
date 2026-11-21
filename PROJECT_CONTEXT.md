@@ -31,10 +31,20 @@ Three tiers: static HTML/JS frontend (root-level .html files) -> Node/Express ba
   and athi->nairobi) is its OWN Route document with its OWN stop ordering reversed to match
   physical travel direction - order is direction-specific, not absolute.
 - Trip: one scheduled run of a Bus on a Route, with a live `seats` array (seat_number,
-  status: available/reserved/booked, booking_id, reserved_by, expires_at)
+  status: available/reserved/booked, booking_id, reserved_by, expires_at). Phase 3 fields:
+  trip_date + departure_time (Nairobi local, 'YYYY-MM-DD' / 'HH:MM'), departs_at (the same
+  moment as a Date; Kenya is UTC+3 all year), campus (= route.from_location), driver (Staff),
+  created_by, status scheduled -> departed -> completed, or cancelled. Trips made before
+  Phase 3 have status 'active' and are ignored by everything new
+  (backend/scripts/retire-legacy-trips.js marks them completed).
 - Booking: one reservation (booking_id, bus, trip, seats as comma-string, boardingStop,
   alightingStop, destination [derived from alightingStop], total_amount, passenger_name,
-  phone_number, status: reserved/booked/expired, checkout_request_id, mpesa_receipt_number)
+  phone_number, checkout_request_id, mpesa_receipt_number). Status: reserved -> booked, or
+  expired; cancelled (trip cancelled, nothing paid by M-Pesa); refund_due (paid by M-Pesa
+  but the trip was cancelled, or the payment arrived after the hold expired) -> refunded
+  (an admin refunded it by hand and marked it on admin.html).
+  One active (reserved/booked) booking per phone number PER TRIP (partial unique index on
+  phone_number + trip), so a student can hold the morning trip and the trip home.
 - Ticket: created only after confirmed payment (ticket_id, booking_id, qr_data, status)
 
 ### Fare calculation (backend/lib/bookingHelpers.js)
@@ -58,6 +68,15 @@ bookings. Throws on unknown stop names - callers must catch and return a clean 4
   the route (see booking_id and phone_number handling in backend/routes/bookings.js) -
   this is the preferred pattern over application-level locking or transactions for this
   project, since it requires no new infrastructure and matches existing code.
+- Trip scheduling clashes (backend/lib/tripSchedule.js): a bus or driver can't have two
+  trips starting less than 2 hours apart. This can't be a unique index, so create/edit run
+  in a MongoDB transaction that first bumps `schedule_version` on the Bus (and driver's
+  Staff doc). Two admins scheduling the same bus at once write the same document, so one
+  transaction aborts with a write conflict, is retried, and then sees the first trip.
+- Booking a trip: the seat reservation's atomic filter also requires status 'scheduled' and
+  departs_at in the future. Cancelling flips the trip status first, then settles bookings;
+  a booking created in between re-checks the trip and cancels itself. Payment confirmation
+  never confirms seats on a cancelled trip; the M-Pesa callback then marks it refund_due.
 - One active booking per phone number: enforced via a partial unique index on
   Booking.phone_number (only counts status IN ['reserved','booked']) - this was hard-won,
   verified with live concurrent testing on Render. Don't weaken or bypass it.
@@ -86,8 +105,15 @@ concurrent payment confirmation.
 - staffAuth.js: staff login - POST /api/staff/auth/request-otp, verify-otp (sets the
   `staff_session` cookie, 12 hours), GET session, POST logout
 - admin.js: every route requires a campus_admin or super_admin login (router-level
-  middleware). Campus admins can only create trips departing their own campus. Staff
-  management (GET/POST /api/admin/staff, PATCH /api/admin/staff/:id) is super_admin only.
+  middleware). Trip scheduling: GET schedule-options, GET trips?date=&campus=, POST trips,
+  PATCH trips/:id (time, bus, driver; bus locked once seats are taken), GET trips/:id/bookings,
+  POST trips/:id/cancel, POST trips/copy (copy one day to another). Refunds: GET refunds,
+  POST bookings/:bookingId/refunded. Campus admins only see and change trips departing their
+  own campus; super admins see both. Staff management (GET/POST /api/admin/staff, PATCH
+  /api/admin/staff/:id) is super_admin only.
+- trips.js (public): GET /api/trips lists bookable trips (scheduled, not left yet, leaving
+  today or tomorrow in Nairobi time); GET /api/trips/:id has stops and taken seats.
+  POST /api/bookings takes `tripId` (no longer `busPlate`). /api/buses only lists the fleet.
 - GET /api/bookings (list of all bookings) requires a campus_admin/super_admin login.
 
 ### Accounts and sessions
@@ -142,8 +168,8 @@ Student OTP login, JWT sessions and pass-covered bookings are done. The expansio
 1. Foundations - staff accounts with roles, locked admin routes, shared js/api.js (done)
 2. Student sign-up + profile page (done) (admission number read from the email, e.g.
    jonahmzera251582@daystar.ac.ke -> 251582), booking history, pass status
-3. Real trip scheduling - two campus admins (Athi River, Nairobi) plan departures the day
-   before (bus, driver, time); students book a trip instead of "a bus"
+3. Real trip scheduling (done) - two campus admins (Athi River, Nairobi) plan departures
+   the day before (bus, driver, time); students book a trip instead of "a bus"
 4. Bus pass purchase (1 month / semester) via M-Pesa, plus admin-granted passes
 5. Driver page with live GPS sharing; live bus map for students (OpenStreetMap, free)
 6. Nearest stop from the student's location (computed in the browser), "your bus is two

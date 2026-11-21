@@ -370,6 +370,9 @@ margin-left:6px;
 .badge.booked{ background:#2e8b57; }
 .badge.reserved{ background:#c58b00; }
 .badge.expired{ background:#7a3b3b; }
+.badge.cancelled{ background:#7a3b3b; }
+.badge.refund_due{ background:#c58b00; }
+.badge.refunded{ background:#4a5a6a; }
 
 .nav-item{
 cursor:pointer;
